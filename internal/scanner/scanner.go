@@ -83,8 +83,7 @@ type Report struct {
 	Projects   []ProjectInfo   `json:"projects"`
 	Attackers  []Attacker      `json:"attackers"`
 	ScanRoots  []string        `json:"scan_roots"`
-	URLs       []URLCheck      `json:"urls"`
-	Intel      *IntelInfo      `json:"intel"`
+	Intel      *IntelInfo      `json:"-"` // sólo para el notificador: las alertas de las fuentes van aparte
 	Containers []ContainerInfo `json:"containers"`
 }
 
@@ -114,14 +113,16 @@ func mkVer(name, version, status string, note Msg) VersionInfo {
 }
 
 type Scanner struct {
-	mu      sync.RWMutex
-	last    *Report
-	running bool
-	rerun   bool // se pidió otro escaneo mientras había uno en curso
-	cfg     *config.Store
-	OnDone  func(*Report) // se llama al terminar cada escaneo (p. ej. para enviar notificaciones)
-	sam     *sysinfo.Sampler
-	audits  sync.Map // caché de auditorías por proyecto
+	mu           sync.RWMutex
+	last         *Report
+	running      bool
+	rerun        bool // se pidió otro escaneo mientras había uno en curso
+	cfg          *config.Store
+	OnDone       func(*Report) // se llama al terminar cada escaneo (p. ej. para enviar notificaciones)
+	sam          *sysinfo.Sampler
+	audits       sync.Map     // caché de auditorías por proyecto
+	intelLast    *IntelResult // última consulta a las fuentes de seguridad (independiente del escaneo general)
+	intelRunning bool
 }
 
 func (s *Scanner) Last() (*Report, bool) {
@@ -148,9 +149,8 @@ func (s *Scanner) Start() bool {
 		again := s.rerun
 		s.rerun = false
 		s.mu.Unlock()
-		if s.OnDone != nil {
-			go func() { defer func() { recover() }(); s.OnDone(r) }()
-		}
+		s.notifyDone(r)
+		go s.maybeAutoIntel() // la consulta de fuentes de seguridad va aparte: una vez al día
 		if again {
 			s.Start()
 		}
@@ -172,7 +172,6 @@ func (s *Scanner) RunSync() *Report {
 		func() { checkProjects(c, s) },
 		func() { checkSecurity(c) },
 		func() { checkResources(c) },
-		func() { checkURLs(c) },
 		func() { checkDocker(c, s) },
 	}
 	var wg sync.WaitGroup
@@ -185,12 +184,6 @@ func (s *Scanner) RunSync() *Report {
 		}(f)
 	}
 	wg.Wait()
-	if !c.cfg.IntelDisabled {
-		checkIntel(c, s) // necesita los resultados de los demás chequeos (versiones, proyectos)
-	} else {
-		c.R.Intel = &IntelInfo{Enabled: false}
-	}
-
 	r := &c.R
 	sort.SliceStable(r.Findings, func(i, j int) bool {
 		a, b := r.Findings[i], r.Findings[j]

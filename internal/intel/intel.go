@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,11 +24,12 @@ import (
 
 // Status describe el resultado de consultar una fuente (se muestra en el dashboard).
 type Status struct {
-	Name   string    `json:"name"`
-	OK     bool      `json:"ok"`
-	Cached bool      `json:"cached"`
-	Error  string    `json:"error,omitempty"`
-	At     time.Time `json:"at"`
+	fails, oks int
+	Name       string    `json:"name"`
+	OK         bool      `json:"ok"`
+	Cached     bool      `json:"cached"`
+	Error      string    `json:"error,omitempty"`
+	At         time.Time `json:"at"`
 }
 
 type Client struct {
@@ -50,7 +52,7 @@ func New(dir, ua, nvdKey string) *Client {
 			dir = ""
 		}
 	}
-	return &Client{dir: dir, ua: ua, nvdKey: nvdKey, http: &http.Client{Timeout: 40 * time.Second}, status: map[string]*Status{}}
+	return &Client{dir: dir, ua: ua, nvdKey: nvdKey, http: &http.Client{Timeout: 45 * time.Second}, status: map[string]*Status{}}
 }
 
 // Statuses devuelve el estado de las fuentes consultadas, ordenado por nombre.
@@ -65,24 +67,33 @@ func (c *Client) Statuses() []Status {
 	return out
 }
 
+// mark anota el resultado de una petición. Una fuente sólo se considera caída si fallan todas sus peticiones;
+// si falla alguna pero otras funcionan queda "OK con aviso" (Error informado).
 func (c *Client) mark(name string, err error, cached bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	s := c.status[name]
-	if s == nil {
-		s = &Status{Name: name, OK: true}
-		c.status[name] = s
+	st := c.status[name]
+	if st == nil {
+		st = &Status{Name: name}
+		c.status[name] = st
 	}
-	s.At = time.Now()
-	if err != nil {
-		if cached { // datos viejos de la caché: sigue siendo útil
-			s.Cached, s.Error = true, err.Error()
-			return
-		}
-		s.OK, s.Error = false, err.Error()
-		return
+	st.At = time.Now()
+	switch {
+	case err == nil:
+		st.oks++
+		st.Cached = st.Cached || cached
+	case cached: // fuente caída pero hay datos viejos en caché
+		st.oks++
+		st.Cached = true
+		st.Error = err.Error()
+	default:
+		st.fails++
+		st.Error = err.Error()
 	}
-	s.Cached = s.Cached || cached
+	st.OK = st.oks > 0
+	if st.fails == 0 && !st.Cached {
+		st.Error = ""
+	}
 }
 
 func cacheFile(dir, url string, body []byte) string {
@@ -123,6 +134,15 @@ func (c *Client) fetch(source, url string, ttl time.Duration, body []byte, out a
 }
 
 func (c *Client) request(url string, body []byte) ([]byte, error) {
+	b, err := c.requestOnce(url, body)
+	if err != nil && (strings.Contains(err.Error(), "HTTP 5") || strings.Contains(err.Error(), "deadline") || strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "reset")) {
+		time.Sleep(3 * time.Second)
+		b, err = c.requestOnce(url, body)
+	}
+	return b, err
+}
+
+func (c *Client) requestOnce(url string, body []byte) ([]byte, error) {
 	method := "GET"
 	var rd io.Reader
 	if body != nil {
@@ -299,8 +319,8 @@ type OSVQuery struct{ Ecosystem, Name, Version string }
 // OSVBatch consulta vulnerabilidades de paquetes (Packagist, npm...) y devuelve los IDs por consulta.
 func (c *Client) OSVBatch(qs []OSVQuery) ([][]string, error) {
 	res := make([][]string, len(qs))
-	for start := 0; start < len(qs); start += 500 {
-		end := start + 500
+	for start := 0; start < len(qs); start += 150 {
+		end := start + 150
 		if end > len(qs) {
 			end = len(qs)
 		}
@@ -437,9 +457,37 @@ func isRateLimit(err error) bool {
 	return strings.Contains(s, "HTTP 403") || strings.Contains(s, "HTTP 429") || strings.Contains(s, "HTTP 503")
 }
 
+func nvdURL(cpe string) string {
+	return "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=500&cpeName=" + cpe
+}
+
+// NVDCached devuelve lo que haya en la caché de disco para un CPE sin ir a la red.
+// fresh indica si tiene menos de 24 h; ok, si hay algún dato (aunque sea viejo).
+func (c *Client) NVDCached(cpe string) (res NVDResult, ok, fresh bool) {
+	if c.dir == "" {
+		return NVDResult{}, false, false
+	}
+	path := cacheFile(c.dir, nvdURL(cpe), nil)
+	fi, err := os.Stat(path)
+	if err != nil {
+		return NVDResult{}, false, false
+	}
+	b, err := os.ReadFile(path)
+	var raw nvdRaw
+	if err != nil || json.Unmarshal(b, &raw) != nil {
+		return NVDResult{}, false, false
+	}
+	return raw.convert(), true, time.Since(fi.ModTime()) < 24*time.Hour
+}
+
+// Pending marca una fuente como "actualizándose en segundo plano" en el estado que ve el dashboard.
+func (c *Client) Pending(name string) {
+	c.mark(name, errors.New("updating in the background"), true)
+}
+
 // NVD devuelve las CVE que NVD asocia a un CPE concreto (producto + versión exacta).
 func (c *Client) NVD(cpe string) (NVDResult, error) {
-	url := "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=500&cpeName=" + cpe
+	url := nvdURL(cpe)
 	var raw nvdRaw
 	// con caché fresca no hace falta respetar el ritmo de NVD
 	if c.dir != "" {

@@ -62,7 +62,7 @@ y muestra los recursos del servidor en vivo.
   el dashboard muestra una capa desenfocada con el logo y el tiempo transcurrido hasta que termina
   (los escaneos automáticos no interrumpen la pantalla).
 - **Docker:** versiones dentro de los contenedores, estado, configuración peligrosa y CVEs de imágenes.
-- **Alertas de seguridad en vivo** cruzando tu software con php.net, nodejs.org, endoflife.date, CISA KEV, NVD, OSV.dev,
+- **Alertas de seguridad** (panel aparte, una vez al día o a demanda) cruzando tu software con php.net, nodejs.org, endoflife.date, CISA KEV, NVD, OSV.dev,
   Ubuntu Security y GitHub Advisories (ver [Fuentes públicas de seguridad](#fuentes-públicas-de-seguridad)).
 - **Notificaciones** a Telegram y Slack cuando aparece un problema nuevo.
 - **Modo terminal:** `devdoctor scan` produce el mismo diagnóstico sin levantar el servidor.
@@ -218,7 +218,6 @@ Archivo: `/etc/devdoctor/config.json` (permisos `0600`, solo root).
 | `listen` | Interfaz de escucha. Vacío = todas; `127.0.0.1` = solo local (para usar con Nginx/Apache) |
 | `username`, `pass_*` | Credenciales (la contraseña nunca se guarda en claro) |
 | `scan_roots` | Directorios **adicionales** donde buscar proyectos. Siempre se revisan `/var/www`, `/srv`, `/home` y `/opt` |
-| `urls` | Sitios web a vigilar (también editable desde el dashboard) |
 | `intel_disabled` | `true` desactiva las consultas a fuentes públicas de seguridad |
 | `nvd_api_key` | Clave gratuita de NVD (opcional): acelera las consultas |
 | `notify` | Notificaciones: `telegram_token`, `telegram_chat_id`, `slack_webhook`, `min_severity` (`crit`/`warn`), `lang`, `recovery` |
@@ -293,17 +292,12 @@ en las últimas 24 horas.
 
 ## Configuración desde el dashboard
 
-El botón **Configuración** del dashboard (icono de engranaje) permite añadir, sin tocar archivos ni reiniciar nada:
+El botón **Configuración** del dashboard (icono de engranaje) permite, sin tocar archivos ni reiniciar nada:
 
 - **Carpetas extra donde buscar proyectos** (una por línea). Se suman a las que DevDoctor ya revisa solo.
-- **Sitios web a vigilar** (una URL por línea). En cada escaneo comprueba que respondan, su tiempo de
-  respuesta, el certificado SSL (válido y fecha de expiración), la redirección de HTTP a HTTPS y las
-  cabeceras de seguridad (`Strict-Transport-Security`, `Content-Security-Policy`, `X-Frame-Options`…),
-  y avisa si el servidor revela versiones de software. Aparecen en la pestaña **Sitios web**.
 
-Al pulsar **Guardar y escanear** se guarda en `config.json` y se lanza un diagnóstico inmediato.
-Las URL deben ser `http://` o `https://` (sin usuario/contraseña) y no se permiten direcciones
-`169.254.x.x` (metadatos de nube). Máximo 30 carpetas y 30 URLs.
+Al pulsar **Guardar y escanear** se guarda en `config.json` y se lanza un diagnóstico inmediato. Las carpetas deben ser
+rutas absolutas (no se permite `/`); máximo 30.
 
 ### ¿Dónde busca proyectos?
 
@@ -328,8 +322,16 @@ proyectos. Si la pestaña **Proyectos** sale vacía, muestra exactamente en qué
 ## Fuentes públicas de seguridad
 
 DevDoctor consulta APIs públicas y gratuitas (sin clave) y las cruza con **lo que tienes instalado**, para
-avisarte de problemas conocidos en cuanto se publican, como un fallo grave de PHP. Los resultados salen en la
-pestaña **Alertas** (con enlace al aviso oficial y el comando para corregirlo) y también como hallazgos.
+avisarte de problemas conocidos en cuanto se publican, como un fallo grave de PHP.
+
+Estas alertas van **aparte del escaneo del servidor**: se ven en el botón con campana **Alertas de seguridad** de la
+cabecera (con un contador), que abre su propio panel con el estado de cada fuente y, por cada aviso, el enlace
+oficial y el comando para corregirlo. **No** se mezclan con los hallazgos ni cambian la puntuación de salud.
+
+- **Una vez al día, automático.** La primera consulta arranca sola tras el primer escaneo y después se repite cada
+  24 h (`intel_interval_hours` en `config.json`). Corre en segundo plano y no frena ni se encadena al escaneo general.
+- **Consultar ahora.** El panel tiene su propio botón para lanzarla cuando quieras, con barra de progreso.
+- **Desde la terminal:** `devdoctor scan --intel` añade estas alertas al diagnóstico (la primera vez tarda por NVD).
 
 | Fuente | Qué aporta |
 |---|---|
@@ -349,9 +351,11 @@ degrada a informativo y se usa el rastreador de la propia distribución. Los paq
 por eso su aviso pide **verificar** que tu versión esté corregida.
 
 - Las respuestas se **cachean en disco** (`/etc/devdoctor/cache`, de 6 h a 7 días según la fuente). Si una fuente
-  no responde se usan los datos guardados y la pestaña Alertas muestra su estado (punto rojo/verde).
-- El primer escaneo con consultas puede tardar un par de minutos, porque NVD limita a 5 peticiones cada 30 s
-  (con una clave gratuita de NVD en `nvd_api_key` baja a unos segundos). Después todo sale de la caché.
+  no responde se usan los datos guardados y el panel muestra el estado de cada una: verde (correcta), ámbar
+  (alguna petición falló o usa datos guardados) o roja (no responde).
+- La primera consulta puede tardar un par de minutos, porque NVD limita a 5 peticiones cada 30 s (con una clave
+  gratuita de NVD en `nvd_api_key` baja a unos segundos). Como va aparte, no afecta a la velocidad del escaneo
+  del servidor, y después casi todo sale de la caché.
 - **Privacidad:** solo se envían nombres y versiones de software (por ejemplo `php 8.3.35`) y, para OSV, nombres de
   paquetes y versiones de tus `composer.lock`/`package-lock.json`. Nunca IPs, usuarios, rutas ni contenido.
 - Se pueden desactivar desde **Configuración → Fuentes de seguridad**, o con `"intel_disabled": true` en `config.json`.
@@ -361,8 +365,8 @@ por eso su aviso pide **verificar** que tu versión esté corregida.
 ## Notificaciones a Telegram y Slack
 
 Desde **Configuración → Notificaciones** puedes recibir un mensaje cuando DevDoctor detecte un problema **nuevo**:
-servicio caído, certificado a punto de caducar, sitio web caído, puerto peligroso expuesto, alertas de las fuentes
-públicas de seguridad, etc.
+servicio caído, certificado a punto de caducar, puerto peligroso expuesto, alertas de las fuentes públicas de
+seguridad, etc. (los avisos cubren tanto el escaneo del servidor como las alertas de seguridad).
 
 **Telegram**
 1. Habla con [@BotFather](https://t.me/BotFather), envía `/newbot` y copia el **token** (`123456789:AAE...`).
@@ -600,7 +604,6 @@ DevDoctor/
 │   │   ├── check_perms.go    permisos
 │   │   ├── check_projects.go proyectos, composer y npm
 │   │   ├── check_docker.go   contenedores
-│   │   ├── check_urls.go     sitios web vigilados (estado, SSL, cabeceras)
 │   │   ├── check_intel.go    cruce de tu software con las fuentes de seguridad
 │   │   ├── check_security.go seguridad y recursos
 │   │   └── semver.go         evaluador de constraints (^, ~, >=, ||)

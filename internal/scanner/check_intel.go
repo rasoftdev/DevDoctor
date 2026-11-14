@@ -126,7 +126,7 @@ func installedSoftware(c *Collector) []inst {
 	return out
 }
 
-func checkIntel(c *Collector, s *Scanner) {
+func runIntel(c *Collector, s *Scanner) IntelInfo {
 	dir := ""
 	if p := s.cfg.Path(); p != "" {
 		dir = filepath.Join(filepath.Dir(p), "cache")
@@ -154,9 +154,7 @@ func checkIntel(c *Collector, s *Scanner) {
 	run(func() { intelGH(c, cl, sw) })
 	wg.Wait()
 
-	c.mu.Lock()
-	c.R.Intel = &IntelInfo{Enabled: true, Sources: cl.Statuses(), CheckedAt: time.Now()}
-	c.mu.Unlock()
+	return IntelInfo{Enabled: true, Sources: cl.Statuses(), CheckedAt: time.Now()}
 }
 
 // ---------------------------------------------------------------- PHP / Node: versiones de seguridad
@@ -212,7 +210,7 @@ func intelPHP(c *Collector, cl *intel.Client, sw []inst) {
 			sev = "info" // los paquetes de la distribución suelen traer los parches con otra numeración
 			detail = M("Installed from your distribution package (%s), which usually backports security fixes without changing the version number. Run apt update && apt upgrade to get them.", s.Pkg)
 		} else {
-			detail = M("Your PHP branch %s has %d security releases you are missing: %s", branch, len(missed), releaseList(missed))
+			detail = M("Your PHP branch %s has %d security release(s) you are missing: %s", branch, len(missed), releaseList(missed))
 		}
 		c.addL("Advisories", sev, M("%s %s: security release %s is available (%s)", s.Name, s.Version, latest.Version, dateOnly(latest.Date)), detail,
 			M("Update PHP to %s (your package manager or the vendor repository, e.g. ondrej/php).", latest.Version), "https://www.php.net/releases/")
@@ -261,7 +259,7 @@ func intelNode(c *Collector, cl *intel.Client, sw []inst) {
 			sev = "info"
 			detail = M("Installed from your distribution package (%s), which usually backports security fixes without changing the version number. Run apt update && apt upgrade to get them.", s.Pkg)
 		} else {
-			detail = M("Your Node.js line %d has %d security releases you are missing: %s", pv[0], len(missed), releaseList(missed))
+			detail = M("Your Node.js line %d has %d security release(s) you are missing: %s", pv[0], len(missed), releaseList(missed))
 		}
 		c.addL("Advisories", sev, M("%s %s: security release %s is available (%s)", s.Name, s.Version, lv, latest.Date), detail,
 			M("Update Node.js to %s (nvm install %s, or your package source).", lv, lv), "https://nodejs.org/en/blog/vulnerability")

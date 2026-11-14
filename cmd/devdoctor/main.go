@@ -69,7 +69,7 @@ Usage: devdoctor <command> [options]
   url         Print the access URL
   setup-code  Print the one-time code used to create the account in the web UI
   passwd      Reset the username/password from the terminal (forgot it or locked out; --user, --password)
-  scan        Run a diagnosis in the terminal (--json for JSON output)
+  scan        Run a diagnosis in the terminal (--json for JSON output, --intel to add the public security sources)
   notify      Send a test notification to the configured Telegram/Slack channels (notify test)
   paths       List/add/remove extra folders where projects are searched (paths add /srv/apps)
   update      Update to the latest version (--check to only look, --ref, --force)
@@ -241,6 +241,7 @@ func cmdScan(args []string) {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
 	path := configFlag(fs)
 	asJSON := fs.Bool("json", false, "JSON output")
+	withIntel := fs.Bool("intel", false, "also query the public security sources (slower the first time)")
 	fs.Parse(args)
 	cs, err := config.Load(*path)
 	if err != nil {
@@ -248,22 +249,41 @@ func cmdScan(args []string) {
 	}
 	sam := &sysinfo.Sampler{}
 	sam.Start()
-	r := scanner.New(cs, sam).RunSync()
+	sc := scanner.New(cs, sam)
+	r := sc.RunSync()
+	var alerts []scanner.Finding
+	if *withIntel {
+		alerts = sc.RunIntel(r).Findings
+	}
 	if *asJSON {
-		b, _ := json.MarshalIndent(r, "", "  ")
+		out := map[string]any{"report": r}
+		if *withIntel {
+			out["security_alerts"] = alerts
+		}
+		b, _ := json.MarshalIndent(out, "", "  ")
 		fmt.Println(string(b))
 		return
 	}
-	icons := map[string]string{"crit": "✖ CRITICAL", "warn": "▲ WARNING ", "info": "● INFO    ", "ok": "✔ OK      "}
-	fmt.Printf("Health score: %d/100  (%d critical, %d warnings)  — %dms\n\n", r.Score, r.Counts["crit"], r.Counts["warn"], r.DurationMs)
-	for _, f := range r.Findings {
-		fmt.Printf("%s [%s] %s\n", icons[f.Severity], f.Category, f.Title)
-		if f.Detail != "" {
-			fmt.Println("           " + strings.ReplaceAll(f.Detail, "\n", "\n           "))
+	icons := map[string]string{"crit": "[CRITICAL]", "warn": "[WARNING] ", "info": "[INFO]    ", "ok": "[OK]      "}
+	show := func(list []scanner.Finding) {
+		for _, f := range list {
+			fmt.Printf("%s [%s] %s\n", icons[f.Severity], f.Category, f.Title)
+			if f.Detail != "" {
+				fmt.Println("            " + strings.ReplaceAll(f.Detail, "\n", "\n            "))
+			}
+			if f.Fix != "" {
+				fmt.Println("            -> " + f.Fix)
+			}
+			if f.Link != "" {
+				fmt.Println("            " + f.Link)
+			}
 		}
-		if f.Fix != "" {
-			fmt.Println("           → " + f.Fix)
-		}
+	}
+	fmt.Printf("Health score: %d/100  (%d critical, %d warnings)  - %dms\n\n", r.Score, r.Counts["crit"], r.Counts["warn"], r.DurationMs)
+	show(r.Findings)
+	if *withIntel {
+		fmt.Printf("\nSecurity alerts from public sources (%d)\n\n", len(alerts))
+		show(alerts)
 	}
 }
 

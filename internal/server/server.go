@@ -66,6 +66,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/metrics", s.guard(s.metrics))
 	mux.HandleFunc("GET /api/report", s.guard(s.report))
 	mux.HandleFunc("POST /api/scan", s.guard(s.startScan))
+	mux.HandleFunc("POST /api/intel/scan", s.guard(s.startIntelScan))
 	mux.HandleFunc("POST /api/account", s.guard(s.account))
 	mux.HandleFunc("GET /api/settings", s.guard(s.getSettings))
 	mux.HandleFunc("POST /api/settings", s.guard(s.setSettings))
@@ -240,7 +241,7 @@ func (s *Server) report(w http.ResponseWriter, r *http.Request) {
 	if rep != nil {
 		rep = rep.Localize(lang)
 	}
-	writeJSON(w, 200, map[string]any{"running": running, "report": rep})
+	writeJSON(w, 200, map[string]any{"running": running, "report": rep, "intel": s.scan.IntelView(lang)})
 }
 
 func (s *Server) startScan(w http.ResponseWriter, r *http.Request) {
@@ -476,7 +477,6 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{
 		"scan_roots":    nonNil(cfg.ScanRoots),
-		"urls":          nonNil(cfg.URLs),
 		"intel_enabled": !cfg.IntelDisabled,
 		"notify": notifyView{TelegramChatID: n.TelegramChatID, TelegramTokenSet: n.TelegramToken != "", SlackWebhookSet: n.SlackWebhook != "",
 			MinSeverity: sev, Lang: n.Lang, Recovery: n.Recovery},
@@ -487,7 +487,6 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) setSettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ScanRoots    []string  `json:"scan_roots"`
-		URLs         []string  `json:"urls"`
 		IntelEnabled *bool     `json:"intel_enabled"`
 		Notify       *notifyIn `json:"notify"`
 	}
@@ -499,11 +498,6 @@ func (s *Server) setSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
 	}
-	urls, err := config.NormalizeURLs(in.URLs)
-	if err != nil {
-		writeJSON(w, 400, map[string]string{"error": err.Error()})
-		return
-	}
 	cur := s.cs.Get()
 	notif, err := mergeNotify(cur.Notify, in.Notify)
 	if err != nil {
@@ -511,7 +505,7 @@ func (s *Server) setSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.cs.Update(func(c *config.Config) {
-		c.ScanRoots, c.URLs, c.Notify = roots, urls, notif
+		c.ScanRoots, c.Notify = roots, notif
 		if in.IntelEnabled != nil {
 			c.IntelDisabled = !*in.IntelEnabled
 		}
@@ -519,7 +513,7 @@ func (s *Server) setSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": err.Error()})
 		return
 	}
-	log.Printf("settings updated from %s (%d folders, %d URLs, notifications: %v)", clientIP(r), len(roots), len(urls), notif.Enabled())
+	log.Printf("settings updated from %s (%d folders, notifications: %v)", clientIP(r), len(roots), notif.Enabled())
 	s.scan.Start()
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
@@ -542,4 +536,9 @@ func (s *Server) testNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"results": notify.Test(n)})
+}
+
+// startIntelScan lanza la consulta a las fuentes de seguridad, independiente del escaneo general.
+func (s *Server) startIntelScan(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]bool{"started": s.scan.StartIntel()})
 }
