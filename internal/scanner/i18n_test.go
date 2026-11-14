@@ -40,7 +40,7 @@ func literals(t *testing.T) []string {
 						lit(call.Args[0])
 					}
 				case *ast.SelectorExpr:
-					if (fn.Sel.Name == "add" && len(call.Args) == 5) || (fn.Sel.Name == "addL" && len(call.Args) == 6) {
+					if (fn.Sel.Name == "add" && len(call.Args) == 5) || (fn.Sel.Name == "addL" && len(call.Args) >= 6) {
 						lit(call.Args[2])
 						lit(call.Args[3])
 						lit(call.Args[4])

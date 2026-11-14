@@ -201,7 +201,7 @@ func intelPHP(c *Collector, cl *intel.Client, sw []inst) {
 		}
 		if len(missed) == 0 {
 			c.addL("Advisories", "info", M("%s %s: a newer patch release %s is available", s.Name, s.Version, latest.Version), "",
-				"Update to the latest patch release to get the fixes and improvements.", "https://www.php.net/releases/")
+				"Update to the latest patch release to get the fixes and improvements.", "https://www.php.net/releases/", latest.Date)
 			continue
 		}
 		sev := "crit"
@@ -213,7 +213,7 @@ func intelPHP(c *Collector, cl *intel.Client, sw []inst) {
 			detail = M("Your PHP branch %s has %d security release(s) you are missing: %s", branch, len(missed), releaseList(missed))
 		}
 		c.addL("Advisories", sev, M("%s %s: security release %s is available (%s)", s.Name, s.Version, latest.Version, dateOnly(latest.Date)), detail,
-			M("Update PHP to %s (your package manager or the vendor repository, e.g. ondrej/php).", latest.Version), "https://www.php.net/releases/")
+			M("Update PHP to %s (your package manager or the vendor repository, e.g. ondrej/php).", latest.Version), "https://www.php.net/releases/", missed[0].Date)
 	}
 }
 
@@ -250,7 +250,7 @@ func intelNode(c *Collector, cl *intel.Client, sw []inst) {
 		lv := strings.TrimPrefix(latest.Version, "v")
 		if len(missed) == 0 {
 			c.addL("Advisories", "info", M("%s %s: a newer patch release %s is available", s.Name, s.Version, lv), "",
-				"Update to the latest patch release to get the fixes and improvements.", "https://nodejs.org/en/blog/vulnerability")
+				"Update to the latest patch release to get the fixes and improvements.", "https://nodejs.org/en/blog/vulnerability", latest.Date)
 			return
 		}
 		sev := "crit"
@@ -262,7 +262,7 @@ func intelNode(c *Collector, cl *intel.Client, sw []inst) {
 			detail = M("Your Node.js line %d has %d security release(s) you are missing: %s", pv[0], len(missed), releaseList(missed))
 		}
 		c.addL("Advisories", sev, M("%s %s: security release %s is available (%s)", s.Name, s.Version, lv, latest.Date), detail,
-			M("Update Node.js to %s (nvm install %s, or your package source).", lv, lv), "https://nodejs.org/en/blog/vulnerability")
+			M("Update Node.js to %s (nvm install %s, or your package source).", lv, lv), "https://nodejs.org/en/blog/vulnerability", missed[0].Date)
 		return
 	}
 }
@@ -373,9 +373,9 @@ func intelEOL(c *Collector, cl *intel.Client, sw []inst, osr osRelease) {
 				sev = "warn"
 				detail = M("Installed from your distribution package: it may still receive backported security fixes until the distribution itself reaches end of life.")
 			}
-			c.addL("Advisories", sev, M("%s %s reached end of life on %s", s.Name, s.Version, cy.EOL), detail, "Upgrade to a supported release.", link)
+			c.addL("Advisories", sev, M("%s %s reached end of life on %s", s.Name, s.Version, cy.EOL), detail, "Upgrade to a supported release.", link, cy.EOL)
 		case days < 180:
-			c.addL("Advisories", "warn", M("%s %s reaches end of life in %d days (%s)", s.Name, s.Version, days, cy.EOL), "", "Upgrade to a supported release.", link)
+			c.addL("Advisories", "warn", M("%s %s reaches end of life in %d days (%s)", s.Name, s.Version, days, cy.EOL), "", "Upgrade to a supported release.", link, cy.EOL)
 		}
 	}
 
@@ -406,14 +406,14 @@ func intelEOL(c *Collector, cl *intel.Client, sw []inst, osr osRelease) {
 	case days < 0:
 		if ext, ok := parseDay(cy.Extended); ok && time.Until(ext) > 0 {
 			c.addL("Advisories", "info", M("%s is in extended security maintenance until %s", name, cy.Extended), "",
-				"Upgrade the operating system to a supported release (do-release-upgrade on Ubuntu) or enable extended security maintenance.", link)
+				"Upgrade the operating system to a supported release (do-release-upgrade on Ubuntu) or enable extended security maintenance.", link, cy.Extended)
 		} else {
 			c.addL("Advisories", "crit", M("The operating system %s reached end of life on %s", name, cy.EOL), "",
-				"Upgrade the operating system to a supported release (do-release-upgrade on Ubuntu) or enable extended security maintenance.", link)
+				"Upgrade the operating system to a supported release (do-release-upgrade on Ubuntu) or enable extended security maintenance.", link, cy.EOL)
 		}
 	case days < 180:
 		c.addL("Advisories", "warn", M("The operating system %s reaches end of life in %d days (%s)", name, days, cy.EOL), "",
-			"Upgrade the operating system to a supported release (do-release-upgrade on Ubuntu) or enable extended security maintenance.", link)
+			"Upgrade the operating system to a supported release (do-release-upgrade on Ubuntu) or enable extended security maintenance.", link, cy.EOL)
 	}
 }
 
@@ -490,7 +490,7 @@ func intelKEV(c *Collector, cl *intel.Client, sw []inst) {
 		c.addL("Advisories", "warn", M("Actively exploited vulnerabilities (CISA KEV) recently added for %s", p.name),
 			M("%s\nThe catalog does not say which versions are affected: verify that your version is patched.", strings.Join(lines, "\n")),
 			M("Check the vendor advisory for each CVE and update %s to a patched version (apt update && apt upgrade).", p.name),
-			"https://nvd.nist.gov/vuln/detail/"+hits[0].CVE)
+			"https://nvd.nist.gov/vuln/detail/"+hits[0].CVE, hits[0].Added)
 	}
 }
 
@@ -730,7 +730,7 @@ func intelNVD(c *Collector, cl *intel.Client, sw []inst) {
 			fix = M("apt update && apt upgrade")
 		}
 		c.addL("Advisories", sev, M("%s %s: %d known HIGH/CRITICAL CVEs match this exact version (%d critical)", s.Name, s.Version, crit+high, crit),
-			detail, fix, "https://nvd.nist.gov/vuln/detail/"+top[0].ID)
+			detail, fix, "https://nvd.nist.gov/vuln/detail/"+top[0].ID, top[0].Published)
 	}
 }
 
@@ -847,9 +847,32 @@ func intelGH(c *Collector, cl *intel.Client, sw []inst) {
 			}
 			lines = append(lines, fmt.Sprintf("%s (%s) — %s", id, a.Severity, a.Summary))
 		}
+		newest := ""
+		for _, a := range hits {
+			if a.Published > newest {
+				newest = a.Published
+			}
+		}
 		c.addL("Advisories", sev, M("%d recent PHP security advisories affect your %s %s", len(hits), s.Name, s.Version), strings.Join(lines, "\n"),
-			"Update PHP to the latest patch release of your branch (see the PHP releases page).", "https://github.com/php/php-src/security/advisories")
+			"Update PHP to the latest patch release of your branch (see the PHP releases page).", "https://github.com/php/php-src/security/advisories", newest)
 	}
 }
 
 var _ = config.Config{}
+
+// isoDate normaliza las fechas de las fuentes (php.net usa "21 Oct 2026", el resto ISO) a AAAA-MM-DD.
+func isoDate(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	for _, layout := range []string{"2006-01-02", time.RFC3339, "2006-01-02T15:04:05.000", "2 Jan 2006", "02 Jan 2006", "Jan 2, 2006"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.Format("2006-01-02")
+		}
+	}
+	if len(s) >= 10 && s[4] == '-' {
+		return s[:10]
+	}
+	return ""
+}

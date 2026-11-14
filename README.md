@@ -220,7 +220,7 @@ Archivo: `/etc/devdoctor/config.json` (permisos `0600`, solo root).
 | `scan_roots` | Directorios **adicionales** donde buscar proyectos. Siempre se revisan `/var/www`, `/srv`, `/home` y `/opt` |
 | `intel_disabled` | `true` desactiva las consultas a fuentes públicas de seguridad |
 | `nvd_api_key` | Clave gratuita de NVD (opcional): acelera las consultas |
-| `notify` | Notificaciones: `telegram_token`, `telegram_chat_id`, `slack_webhook`, `min_severity` (`crit`/`warn`), `lang`, `recovery` |
+| `notify` | Notificaciones: `telegram_token`, `telegram_chat_id`, `slack_webhook`, `min_severity` (`crit`/`warn`), `recent_window` (`day`/`week`/`month`/`all`), `lang`, `recovery` |
 | `scan_interval_min` | Minutos entre diagnósticos automáticos (15 por defecto) |
 
 Tras editar a mano: `sudo systemctl restart devdoctor`.
@@ -331,6 +331,9 @@ oficial y el comando para corregirlo. **No** se mezclan con los hallazgos ni cam
 - **Una vez al día, automático.** La primera consulta arranca sola tras el primer escaneo y después se repite cada
   24 h (`intel_interval_hours` en `config.json`). Corre en segundo plano y no frena ni se encadena al escaneo general.
 - **Consultar ahora.** El panel tiene su propio botón para lanzarla cuando quieras, con barra de progreso.
+- **Filtro de periodo.** Cada alerta muestra la fecha de lo que informa (publicación de la versión, de la CVE o
+  del aviso) y puedes filtrar por **24 h, 7 días, 30 días o Todas**, con el número de alertas de cada periodo. Las
+  alertas sin fecha (estado actual, como paquetes sin parche) solo salen en «Todas».
 - **Desde la terminal:** `devdoctor scan --intel` añade estas alertas al diagnóstico (la primera vez tarda por NVD).
 
 | Fuente | Qué aporta |
@@ -385,6 +388,9 @@ Cómo funcionan los avisos:
   Los valores que cambian solos (días restantes, % de disco, milisegundos) no cuentan como un problema distinto.
 - **Primer escaneo:** se envía un resumen con lo más importante en ese momento, sin inundarte con todo lo existente.
 - **Umbral:** solo críticos (por defecto) o críticos y avisos.
+- **Solo lo reciente:** de las alertas de seguridad que tienen fecha de publicación, solo se avisa de las publicadas en
+  la ventana que elijas (24 horas, **7 días** por defecto, 30 días o sin límite); las más antiguas se descartan en
+  silencio. Los problemas detectados en tu servidor se avisan siempre al aparecer.
 - **Resueltos** (opcional): cuando un problema desaparece durante dos escaneos seguidos, se avisa de que se resolvió.
 - Se envía en el idioma que tenías elegido en el dashboard al guardar, con el comando sugerido para corregir y el
   enlace al aviso oficial.

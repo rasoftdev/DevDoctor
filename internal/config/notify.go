@@ -13,9 +13,10 @@ type NotifyConfig struct {
 	TelegramToken  string `json:"telegram_token,omitempty"`
 	TelegramChatID string `json:"telegram_chat_id,omitempty"`
 	SlackWebhook   string `json:"slack_webhook,omitempty"`
-	MinSeverity    string `json:"min_severity,omitempty"` // "crit" (por defecto) o "warn"
-	Lang           string `json:"lang,omitempty"`         // idioma de los mensajes: "en" o "es"
-	Recovery       bool   `json:"recovery,omitempty"`     // avisar también cuando un problema se resuelve
+	MinSeverity    string `json:"min_severity,omitempty"`  // "crit" (por defecto) o "warn"
+	Lang           string `json:"lang,omitempty"`          // idioma de los mensajes: "en" o "es"
+	Recovery       bool   `json:"recovery,omitempty"`      // avisar también cuando un problema se resuelve
+	RecentWindow   string `json:"recent_window,omitempty"` // "day", "week" (por defecto), "month" o "all": sólo se avisa de alertas con fecha dentro de esa ventana
 }
 
 func (n NotifyConfig) TelegramEnabled() bool { return n.TelegramToken != "" && n.TelegramChatID != "" }
@@ -60,10 +61,29 @@ func (n *NotifyConfig) Validate() error {
 	default:
 		return errors.New("invalid minimum severity")
 	}
+	switch n.RecentWindow {
+	case "", "day", "week", "month", "all":
+	default:
+		return errors.New("invalid notification time window")
+	}
 	switch n.Lang {
 	case "", "en", "es":
 	default:
 		return errors.New("invalid language")
 	}
 	return nil
+}
+
+// RecentDays devuelve la ventana, en días de calendario, de las alertas con fecha de las que se notifica:
+// 1 = hoy y ayer, 7 = una semana (por defecto), 31 = un mes; 0 = sin límite.
+func (n NotifyConfig) RecentDays() int {
+	switch n.RecentWindow {
+	case "day":
+		return 1
+	case "month":
+		return 31
+	case "all":
+		return 0
+	}
+	return 7
 }

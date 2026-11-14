@@ -419,6 +419,7 @@ type notifyView struct {
 	MinSeverity      string `json:"min_severity"`
 	Lang             string `json:"lang"`
 	Recovery         bool   `json:"recovery"`
+	RecentWindow     string `json:"recent_window"`
 }
 
 // notifyIn es lo que envía el dashboard. Un secreto vacío significa "conservar el guardado".
@@ -431,6 +432,7 @@ type notifyIn struct {
 	MinSeverity    string `json:"min_severity"`
 	Lang           string `json:"lang"`
 	Recovery       bool   `json:"recovery"`
+	RecentWindow   string `json:"recent_window"`
 }
 
 func mergeNotify(old config.NotifyConfig, in *notifyIn) (config.NotifyConfig, error) {
@@ -453,7 +455,10 @@ func mergeNotify(old config.NotifyConfig, in *notifyIn) (config.NotifyConfig, er
 	if w := strings.TrimSpace(in.SlackWebhook); w != "" {
 		n.SlackWebhook = w
 	}
-	n.MinSeverity, n.Lang, n.Recovery = in.MinSeverity, in.Lang, in.Recovery
+	n.MinSeverity, n.Lang, n.Recovery, n.RecentWindow = in.MinSeverity, in.Lang, in.Recovery, in.RecentWindow
+	if n.RecentWindow == "" {
+		n.RecentWindow = "week"
+	}
 	if n.MinSeverity == "" {
 		n.MinSeverity = "crit"
 	}
@@ -479,7 +484,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 		"scan_roots":    nonNil(cfg.ScanRoots),
 		"intel_enabled": !cfg.IntelDisabled,
 		"notify": notifyView{TelegramChatID: n.TelegramChatID, TelegramTokenSet: n.TelegramToken != "", SlackWebhookSet: n.SlackWebhook != "",
-			MinSeverity: sev, Lang: n.Lang, Recovery: n.Recovery},
+			MinSeverity: sev, Lang: n.Lang, Recovery: n.Recovery, RecentWindow: recentOf(n.RecentWindow)},
 	})
 }
 
@@ -541,4 +546,11 @@ func (s *Server) testNotify(w http.ResponseWriter, r *http.Request) {
 // startIntelScan lanza la consulta a las fuentes de seguridad, independiente del escaneo general.
 func (s *Server) startIntelScan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]bool{"started": s.scan.StartIntel()})
+}
+
+func recentOf(v string) string {
+	if v == "" {
+		return "week"
+	}
+	return v
 }

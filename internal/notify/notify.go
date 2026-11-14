@@ -274,9 +274,13 @@ func (m *Manager) Handle(rep *scanner.Report) {
 	}
 	cur := map[string]item{}
 	var order []item
+	window := n.RecentDays()
 	for i, f := range rep.Findings {
 		r, ok := rank[f.Severity]
 		if !ok || r > maxRank {
+			continue
+		}
+		if !recent(f.Date, window) { // sólo lo más reciente: lo publicado hace mucho no se avisa
 			continue
 		}
 		k := fingerprint(f)
@@ -418,4 +422,21 @@ func logFail(rs []Result) {
 			log.Printf("notification failed (%s): %s", r.Channel, r.Error)
 		}
 	}
+}
+
+// recent indica si una fecha (AAAA-MM-DD) cae dentro de la ventana, contada en días de calendario (las fechas
+// no llevan hora, así que "1" es hoy y ayer a cualquier hora). Sin fecha (estado actual del servidor) o sin
+// ventana (0) siempre cuenta.
+func recent(date string, days int) bool {
+	if date == "" || days <= 0 {
+		return true
+	}
+	t, err := time.ParseInLocation("2006-01-02", date, time.Local)
+	if err != nil {
+		return true
+	}
+	n := time.Now()
+	today := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, time.Local)
+	ago := int(today.Sub(t).Hours()/24 + 0.5)
+	return ago <= days
 }

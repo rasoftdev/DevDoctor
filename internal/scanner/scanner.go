@@ -15,6 +15,7 @@ type Finding struct {
 	Detail   string `json:"detail,omitempty"`
 	Fix      string `json:"fix,omitempty"`
 	Link     string `json:"link,omitempty"` // referencia externa (aviso oficial)
+	Date     string `json:"date,omitempty"` // fecha (AAAA-MM-DD) de lo que informa el hallazgo, si se conoce
 
 	t, d, f Msg // originales traducibles
 }
@@ -100,10 +101,10 @@ func (c *Collector) add(cat, sev string, title, detail, fix any) {
 }
 
 // addL es add con un enlace a la referencia oficial.
-func (c *Collector) addL(cat, sev string, title, detail, fix any, link string) {
+func (c *Collector) addL(cat, sev string, title, detail, fix any, link string, date ...string) {
 	t, d, f := msgOf(title), msgOf(detail), msgOf(fix)
 	c.mu.Lock()
-	c.R.Findings = append(c.R.Findings, Finding{Category: cat, Severity: sev, Title: t.Render("en"), Detail: d.Render("en"), Fix: f.Render("en"), t: t, d: d, f: f, Link: link})
+	c.R.Findings = append(c.R.Findings, Finding{Category: cat, Severity: sev, Title: t.Render("en"), Detail: d.Render("en"), Fix: f.Render("en"), t: t, d: d, f: f, Link: link, Date: firstDate(date)})
 	c.mu.Unlock()
 }
 
@@ -249,4 +250,11 @@ func localizeVersions(in []VersionInfo, lang string) []VersionInfo {
 		out[i] = v
 	}
 	return out
+}
+
+func firstDate(d []string) string {
+	if len(d) == 0 {
+		return ""
+	}
+	return isoDate(d[0])
 }
