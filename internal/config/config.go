@@ -7,7 +7,6 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -20,7 +19,9 @@ const pbkdf2Iter = 600000
 type Config struct {
 	Port            int      `json:"port"`
 	Host            string   `json:"host"`
+	Listen          string   `json:"listen,omitempty"` // interfaz de escucha; vacío = todas, "127.0.0.1" = solo local (con proxy)
 	Username        string   `json:"username"`
+	SetupToken      string   `json:"setup_token,omitempty"` // código de un solo uso para crear la cuenta en la web
 	PassSalt        string   `json:"pass_salt"`
 	PassHash        string   `json:"pass_hash"`
 	Iter            int      `json:"iter"`
@@ -85,8 +86,8 @@ func (s *Store) saveLocked() error {
 }
 
 func (c *Config) SetPassword(pw string) error {
-	if len(pw) < 10 {
-		return errors.New("la contraseña debe tener al menos 10 caracteres")
+	if err := ValidatePassword(c.Username, pw); err != nil {
+		return err
 	}
 	salt := make([]byte, 16)
 	rand.Read(salt)
@@ -137,3 +138,6 @@ func New(path string, cfg Config) *Store { return &Store{path: path, cfg: cfg} }
 
 // Path devuelve la ruta del archivo de configuración.
 func (s *Store) Path() string { return s.path }
+
+// Configured indica si ya existe una cuenta de acceso.
+func (c *Config) Configured() bool { return c.PassHash != "" && c.Username != "" }

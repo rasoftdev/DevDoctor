@@ -1,26 +1,51 @@
 package server
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
 	"devdoctor/internal/config"
 	"devdoctor/internal/scanner"
 	"devdoctor/internal/sysinfo"
 	"devdoctor/internal/version"
 	"devdoctor/internal/web"
-	"encoding/json"
-	"fmt"
-	"log"
-	"net"
-	"net/http"
-	"strconv"
-	"time"
 )
+
+const cookieName = "__Host-dd_session" // el prefijo __Host- obliga Secure, Path=/ y sin Domain
 
 type Server struct {
 	cs   *config.Store
 	auth *Auth
 	sam  *sysinfo.Sampler
 	scan *scanner.Scanner
+	csp  string
+}
+
+// scriptHash calcula el hash CSP del único <script> en línea del dashboard,
+// para no necesitar 'unsafe-inline' en script-src.
+func scriptHash(page []byte) string {
+	start := bytes.Index(page, []byte("<script>"))
+	end := bytes.LastIndex(page, []byte("</script>"))
+	if start < 0 || end < start {
+		return ""
+	}
+	body := page[start+len("<script>") : end]
+	body = bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n")) // el parser HTML normaliza CRLF
+	sum := sha256.Sum256(body)
+	return "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
 }
 
 func (s *Server) routes() http.Handler {
@@ -29,6 +54,8 @@ func (s *Server) routes() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(web.Index)
 	})
+	mux.HandleFunc("GET /api/status", s.status)
+	mux.HandleFunc("POST /api/setup", s.setup)
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("POST /api/logout", s.logout)
 	mux.HandleFunc("GET /api/me", s.me)
@@ -36,10 +63,24 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/report", s.guard(s.report))
 	mux.HandleFunc("POST /api/scan", s.guard(s.startScan))
 	mux.HandleFunc("POST /api/account", s.guard(s.account))
-	return secure(mux)
+	return s.secure(mux)
 }
 
-func secure(next http.Handler) http.Handler {
+// originOK rechaza peticiones que no vengan de la propia página (defensa CSRF adicional a SameSite).
+func originOK(r *http.Request) bool {
+	if sf := r.Header.Get("Sec-Fetch-Site"); sf != "" && sf != "same-origin" && sf != "none" {
+		return false
+	}
+	if o := r.Header.Get("Origin"); o != "" {
+		u, err := url.Parse(o)
+		if err != nil || u.Host != r.Host {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Server) secure(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
@@ -47,20 +88,33 @@ func secure(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cache-Control", "no-store")
 		h.Set("Strict-Transport-Security", "max-age=31536000")
-		h.Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'")
-		// Los POST deben ser JSON (impide formularios cross-site simples).
-		if r.Method == http.MethodPost && r.Header.Get("Content-Type") != "application/json" {
-			http.Error(w, "content-type inválido", http.StatusUnsupportedMediaType)
-			return
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+		h.Set("Content-Security-Policy", s.csp)
+		if r.Method == http.MethodPost {
+			// Los POST deben ser JSON y del mismo origen (impide formularios cross-site).
+			if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+				http.Error(w, "content-type inválido", http.StatusUnsupportedMediaType)
+				return
+			}
+			if !originOK(r) {
+				http.Error(w, "origen no permitido", http.StatusForbidden)
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
+func (s *Server) sessionOK(r *http.Request) bool {
+	ck, err := r.Cookie(cookieName)
+	return err == nil && s.auth.Valid(ck.Value, r.UserAgent())
+}
+
 func (s *Server) guard(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ck, err := r.Cookie("dd_session")
-		if err != nil || !s.auth.Valid(ck.Value) {
+		if !s.sessionOK(r) {
 			writeJSON(w, 401, map[string]string{"error": "no autenticado"})
 			return
 		}
@@ -74,50 +128,83 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// clientIP devuelve la IP real del cliente. Sólo se confía en X-Forwarded-For cuando la
+// conexión viene de un proxy local (127.0.0.1/::1), usando el último valor (el que añadió el proxy).
 func clientIP(r *http.Request) string {
-	h, _, err := net.SplitHostPort(r.RemoteAddr)
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
 	}
-	return h
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if cand := net.ParseIP(strings.TrimSpace(parts[len(parts)-1])); cand != nil {
+				return cand.String()
+			}
+		}
+	}
+	return host
+}
+
+func setSession(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/",
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: int(sessionAbsolute.Seconds())})
+}
+
+func tooMany(w http.ResponseWriter) {
+	writeJSON(w, 429, map[string]string{"error": "demasiados intentos; espera 15 minutos"})
+}
+
+func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(v) != nil {
+		writeJSON(w, 400, map[string]string{"error": "solicitud inválida"})
+		return false
+	}
+	return true
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	ip := clientIP(r)
 	if s.auth.Locked(ip) {
-		writeJSON(w, 429, map[string]string{"error": "demasiados intentos; espera 15 minutos"})
+		tooMany(w)
 		return
 	}
 	var in struct{ Username, Password string }
-	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in) != nil {
-		writeJSON(w, 400, map[string]string{"error": "solicitud inválida"})
+	if !decode(w, r, &in) {
 		return
 	}
 	cfg := s.cs.Get()
-	if !cfg.CheckLogin(in.Username, in.Password) {
+	ok := false
+	if len(in.Username) <= 128 && len(in.Password) <= 256 {
+		var err error
+		ok, err = s.auth.WithHash(func() bool { return cfg.CheckLogin(in.Username, in.Password) })
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "servidor ocupado, inténtalo de nuevo"})
+			return
+		}
+	}
+	if !ok {
 		s.auth.Fail(ip)
 		log.Printf("login fallido desde %s", ip)
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(s.auth.Delay())
 		writeJSON(w, 401, map[string]string{"error": "usuario o contraseña incorrectos"})
 		return
 	}
 	s.auth.Reset(ip)
-	http.SetCookie(w, &http.Cookie{Name: "dd_session", Value: s.auth.NewSession(), Path: "/",
-		HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: int(sessionTTL.Seconds())})
+	setSession(w, s.auth.NewSession(r.UserAgent()))
 	writeJSON(w, 200, map[string]string{"user": cfg.Username})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	if ck, err := r.Cookie("dd_session"); err == nil {
+	if ck, err := r.Cookie(cookieName); err == nil {
 		s.auth.Drop(ck.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "dd_session", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true})
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	ck, err := r.Cookie("dd_session")
-	if err != nil || !s.auth.Valid(ck.Value) {
+	if !s.sessionOK(r) {
 		writeJSON(w, 401, map[string]string{"error": "no autenticado"})
 		return
 	}
@@ -137,29 +224,54 @@ func (s *Server) startScan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) account(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if s.auth.Locked(ip) {
+		tooMany(w)
+		return
+	}
 	var in struct {
 		Current  string `json:"current"`
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in) != nil {
-		writeJSON(w, 400, map[string]string{"error": "solicitud inválida"})
+	if !decode(w, r, &in) {
 		return
 	}
+	in.Username = strings.TrimSpace(in.Username)
 	cfg := s.cs.Get()
-	if !cfg.CheckLogin(cfg.Username, in.Current) {
-		time.Sleep(500 * time.Millisecond)
+	ok := false
+	if len(in.Current) <= 256 {
+		var err error
+		ok, err = s.auth.WithHash(func() bool { return cfg.CheckLogin(cfg.Username, in.Current) })
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "servidor ocupado, inténtalo de nuevo"})
+			return
+		}
+	}
+	if !ok { // un robo de sesión no debe permitir adivinar la contraseña actual sin límite
+		s.auth.Fail(ip)
+		log.Printf("login fallido desde %s (cambio de cuenta)", ip)
+		time.Sleep(s.auth.Delay())
 		writeJSON(w, 403, map[string]string{"error": "la contraseña actual no es correcta"})
 		return
 	}
+	s.auth.Reset(ip)
 	var perr error
 	err := s.cs.Update(func(c *config.Config) {
+		next := *c
 		if in.Username != "" {
-			c.Username = in.Username
+			if len(in.Username) < 3 || len(in.Username) > 64 {
+				perr = errors.New("el usuario debe tener entre 3 y 64 caracteres")
+				return
+			}
+			next.Username = in.Username
 		}
 		if in.Password != "" {
-			perr = c.SetPassword(in.Password)
+			if perr = next.SetPassword(in.Password); perr != nil {
+				return
+			}
 		}
+		*c = next
 	})
 	if perr != nil {
 		writeJSON(w, 400, map[string]string{"error": perr.Error()})
@@ -169,8 +281,67 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": err.Error()})
 		return
 	}
+	log.Printf("credenciales actualizadas desde %s", ip)
 	s.auth.DropAll() // cierra todas las sesiones; hay que volver a entrar
 	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+// status indica al frontend si hay que mostrar el asistente de primer acceso.
+func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cs.Get()
+	writeJSON(w, 200, map[string]bool{"setup": !cfg.Configured()})
+}
+
+// setup crea la cuenta inicial desde la web. Exige el código de un solo uso mostrado en la
+// terminal durante la instalación, para que nadie más pueda reclamar la cuenta.
+func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if s.auth.Locked(ip) {
+		tooMany(w)
+		return
+	}
+	var in struct{ Token, Username, Password string }
+	if !decode(w, r, &in) {
+		return
+	}
+	in.Username = strings.TrimSpace(in.Username)
+	var perr error
+	var denied bool
+	err := s.cs.Update(func(c *config.Config) {
+		if c.Configured() || c.SetupToken == "" || subtle.ConstantTimeCompare([]byte(in.Token), []byte(c.SetupToken)) != 1 {
+			denied = true
+			return
+		}
+		if len(in.Username) < 3 || len(in.Username) > 64 {
+			perr = errors.New("el usuario debe tener entre 3 y 64 caracteres")
+			return
+		}
+		next := *c
+		next.Username = in.Username
+		if perr = next.SetPassword(in.Password); perr != nil {
+			return
+		}
+		next.SetupToken = ""
+		*c = next
+	})
+	switch {
+	case denied:
+		s.auth.Fail(ip)
+		log.Printf("intento de configuración inicial rechazado desde %s", ip)
+		time.Sleep(s.auth.Delay())
+		writeJSON(w, 403, map[string]string{"error": "código de configuración incorrecto o la cuenta ya existe"})
+		return
+	case perr != nil:
+		writeJSON(w, 400, map[string]string{"error": perr.Error()})
+		return
+	case err != nil:
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	s.auth.Reset(ip)
+	log.Printf("cuenta inicial creada: %s", in.Username)
+	setSession(w, s.auth.NewSession(r.UserAgent()))
+	writeJSON(w, 200, map[string]string{"user": in.Username})
 }
 
 func Serve(cs *config.Store, dir string) error {
@@ -189,15 +360,26 @@ func Serve(cs *config.Store, dir string) error {
 			sc.Start()
 		}
 	}()
-	srv := &Server{cs: cs, auth: NewAuth(), sam: sam, scan: sc}
+	csp := "default-src 'none'; script-src " + scriptHash(web.Index) +
+		"; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; " +
+		"base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+	srv := &Server{cs: cs, auth: NewAuth(), sam: sam, scan: sc, csp: csp}
 	hs := &http.Server{
-		Addr:              ":" + strconv.Itoa(cfg.Port),
-		Handler:           srv.routes(),
-		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12},
+		Addr:    net.JoinHostPort(cfg.Listen, strconv.Itoa(cfg.Port)),
+		Handler: srv.routes(),
+		TLSConfig: &tls.Config{
+			Certificates:     []tls.Certificate{cert},
+			MinVersion:       tls.VersionTLS12,
+			CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
+		},
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    16 << 10,
+	}
+	if !cfg.Configured() {
+		log.Printf("PENDIENTE: abre https://%s:%d y crea tu cuenta con el código de configuración (devdoctor setup-code)", cfg.Host, cfg.Port)
 	}
 	log.Printf("DevDoctor %s escuchando en https://%s:%d", version.Version, cfg.Host, cfg.Port)
 	return hs.ListenAndServeTLS("", "")

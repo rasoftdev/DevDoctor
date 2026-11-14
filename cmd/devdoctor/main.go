@@ -1,11 +1,13 @@
 package main
 
 import (
+	"crypto/rand"
 	"devdoctor/internal/config"
 	"devdoctor/internal/scanner"
 	"devdoctor/internal/server"
 	"devdoctor/internal/sysinfo"
 	"devdoctor/internal/version"
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -34,6 +36,8 @@ func main() {
 		cmdPasswd(args)
 	case "url":
 		cmdURL(args)
+	case "setup-code":
+		cmdSetupCode(args)
 	case "scan":
 		cmdScan(args)
 	case "version", "-v", "--version":
@@ -46,6 +50,7 @@ Uso: devdoctor <comando> [opciones]
   init     Crea la configuración, el certificado TLS y el usuario (--port, --host, --user, --password)
   run      Inicia el dashboard web (lo que ejecuta el servicio systemd)
   url      Muestra la URL de acceso
+  setup-code  Muestra el código para crear la cuenta en la web (primer acceso)
   passwd   Cambia usuario/contraseña desde la terminal (--user, --password)
   scan     Ejecuta un diagnóstico en la terminal (--json para salida JSON)
   version  Muestra la versión`)
@@ -73,10 +78,11 @@ func portFree(p int) bool {
 func cmdInit(args []string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	path := configFlag(fs)
-	port := fs.Int("port", 0, "puerto (por defecto 9443, o el siguiente libre)")
+	port := fs.Int("port", 0, "puerto (por defecto: uno aleatorio libre entre 61000 y 64999)")
 	host := fs.String("host", "", "IP o dominio público para la URL (auto-detecta si se omite)")
-	user := fs.String("user", "admin", "usuario del dashboard")
-	pass := fs.String("password", "", "contraseña (se genera una aleatoria si se omite)")
+	user := fs.String("user", "admin", "usuario (sólo con --password; si no, se define en la web)")
+	pass := fs.String("password", "", "contraseña (opcional; si se omite, se crea en la web al primer acceso)")
+	listen := fs.String("listen", "", "interfaz de escucha (vacío = todas; 127.0.0.1 si usarás Nginx/Apache como proxy)")
 	force := fs.Bool("force", false, "sobrescribir configuración existente")
 	fs.Parse(args)
 
@@ -87,12 +93,8 @@ func cmdInit(args []string) {
 	}
 	p := *port
 	if p == 0 {
-		p = 9443
-		for i := 0; i < 100 && !portFree(p); i++ {
-			p++
-		}
-		if !portFree(p) {
-			fail(fmt.Errorf("no encontré un puerto libre cerca de 9443"))
+		if p = pickPort(); p == 0 {
+			fail(fmt.Errorf("no encontré un puerto libre; indica uno con --port"))
 		}
 	} else if !portFree(p) {
 		fail(fmt.Errorf("el puerto %d ya está ocupado; elige otro con --port", p))
@@ -101,13 +103,16 @@ func cmdInit(args []string) {
 	if h == "" {
 		h = sysinfo.PrimaryIP()
 	}
-	generated := false
-	if *pass == "" {
-		*pass, generated = config.RandomPassword(16), true
-	}
-	cfg := config.Config{Port: p, Host: h, Username: *user, ScanIntervalMin: 15}
-	if err := cfg.SetPassword(*pass); err != nil {
-		fail(err)
+	// Sin --password: el usuario y la contraseña se definen en la web (primer acceso),
+	// protegido por un código de un solo uso que se muestra aquí.
+	cfg := config.Config{Port: p, Host: h, Listen: *listen, ScanIntervalMin: 15}
+	if *pass != "" {
+		cfg.Username = *user
+		if err := cfg.SetPassword(*pass); err != nil {
+			fail(err)
+		}
+	} else {
+		cfg.SetupToken = config.RandomPassword(12)
 	}
 	cs := config.New(*path, cfg)
 	if err := cs.Update(func(*config.Config) {}); err != nil {
@@ -116,9 +121,11 @@ func cmdInit(args []string) {
 	if _, err := config.EnsureCert(filepath.Dir(*path), h); err != nil {
 		fail(err)
 	}
-	fmt.Printf("\n  DevDoctor listo\n  ───────────────\n  URL:        https://%s:%d\n  Usuario:    %s\n", h, p, *user)
-	if generated {
-		fmt.Printf("  Contraseña: %s   (cámbiala en el dashboard → Cuenta)\n", *pass)
+	fmt.Printf("\n  DevDoctor listo\n  ───────────────\n  URL:        https://%s:%d\n", h, p)
+	if cfg.SetupToken != "" {
+		fmt.Printf("  Código:     %s\n\n  Abre la URL, introduce el código y crea tu usuario y contraseña en la web.\n  (¿Perdiste el código? sudo devdoctor setup-code)\n", cfg.SetupToken)
+	} else {
+		fmt.Printf("  Usuario:    %s\n", *user)
 	}
 	fmt.Println("\n  El navegador avisará de certificado autofirmado: es normal, acepta la excepción.")
 }
@@ -207,4 +214,49 @@ func cmdScan(args []string) {
 			fmt.Println("           → " + f.Fix)
 		}
 	}
+}
+
+func cmdSetupCode(args []string) {
+	fs := flag.NewFlagSet("setup-code", flag.ExitOnError)
+	path := configFlag(fs)
+	fs.Parse(args)
+	cs, err := config.Load(*path)
+	if err != nil {
+		fail(err)
+	}
+	c := cs.Get()
+	if c.Configured() || c.SetupToken == "" {
+		fmt.Println("La cuenta ya está configurada. Para restablecerla usa: devdoctor passwd")
+		return
+	}
+	fmt.Printf("URL:    https://%s:%d\nCódigo: %s\n", c.Host, c.Port, c.SetupToken)
+}
+
+// pickPort elige un puerto alto y poco habitual: aleatorio en 61000–64999, por encima del rango
+// efímero de Linux (32768–60999, usado por conexiones salientes) y que esté realmente libre.
+func pickPort() int {
+	lo, hi := 61000, 64999
+	if f := strings.Fields(sysReadFile("/proc/sys/net/ipv4/ip_local_port_range")); len(f) == 2 {
+		if top, err := strconv.Atoi(f[1]); err == nil && top >= lo && top < hi-1000 {
+			lo = top + 1 // el sistema tiene el rango efímero ampliado: empezar por encima
+		}
+	}
+	for i := 0; i < 200; i++ {
+		p := lo + int(binary.BigEndian.Uint16(randBytes(2)))%(hi-lo+1)
+		if portFree(p) {
+			return p
+		}
+	}
+	return 0
+}
+
+func randBytes(n int) []byte {
+	b := make([]byte, n)
+	rand.Read(b)
+	return b
+}
+
+func sysReadFile(p string) string {
+	b, _ := os.ReadFile(p)
+	return string(b)
 }

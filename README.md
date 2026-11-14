@@ -23,7 +23,7 @@ y muestra los recursos del servidor en vivo.
 - [Qué revisa DevDoctor](#qué-revisa-devdoctor)
 - [Puntuación de salud](#puntuación-de-salud)
 - [Seguridad de la propia app](#seguridad-de-la-propia-app)
-- [Poner DevDoctor detrás de Nginx](#poner-devdoctor-detrás-de-nginx)
+- [Poner DevDoctor detrás de Nginx o Apache](#poner-devdoctor-detrás-de-nginx-o-apache)
 - [API](#api)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Desarrollo y compilación](#desarrollo-y-compilación)
@@ -38,7 +38,7 @@ y muestra los recursos del servidor en vivo.
 
 - **Un solo binario** escrito en Go, sin dependencias en el servidor (ni PHP, ni Node, ni Python).
   El dashboard va embebido; funciona sin internet y sin CDNs.
-- **URL automática** con la IP del servidor y un puerto libre (desde el 9443), servida por HTTPS
+- **URL automática** con la IP del servidor y un puerto alto y poco habitual (aleatorio entre 61000 y 64999, fuera del rango que usa Linux para conexiones salientes y comprobado como libre), servida por HTTPS
   con un certificado autofirmado que se genera solo.
 - **Login configurable:** usuario y contraseña definidos al instalar y editables desde el dashboard
   (botón **Cuenta**) o con `devdoctor passwd`.
@@ -63,7 +63,28 @@ Para **compilar** necesitas Go 1.24 o superior (no es necesario en el servidor).
 
 ## Instalación
 
-### 1. Compilar
+### Opción A — Un solo comando (descarga, instala y limpia)
+
+El repositorio incluye `get.sh`: clona el repo en una carpeta temporal, compila (descarga un Go temporal si
+el servidor no lo tiene), instala el servicio y **borra todo lo temporal** al terminar.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rasoftdev/DevDoctor/main/get.sh | sudo bash
+
+# con opciones (puerto, host…):
+curl -fsSL https://raw.githubusercontent.com/rasoftdev/DevDoctor/main/get.sh | sudo bash -s -- --port 8443 --host 203.0.113.10
+
+# actualizar: volver a ejecutar el mismo comando (conserva cuenta y configuración)
+# desinstalar:
+curl -fsSL https://raw.githubusercontent.com/rasoftdev/DevDoctor/main/get.sh | sudo bash -s -- uninstall
+```
+
+Requiere `git` y `curl` en el servidor. Como con cualquier `curl | bash`, revisa el script antes si no
+confías en el origen: <https://github.com/rasoftdev/DevDoctor/blob/main/get.sh>.
+
+### Opción B — Compilar y copiar a mano
+
+#### 1. Compilar
 
 En tu máquina de desarrollo (Windows, macOS o Linux con Go instalado):
 
@@ -73,13 +94,13 @@ bash scripts/build.sh
 
 Genera en `dist/`: `devdoctor-linux-amd64`, `devdoctor-linux-arm64`, `install.sh` y `devdoctor.service`.
 
-### 2. Copiar al servidor
+#### 2. Copiar al servidor
 
 ```bash
 scp -r dist usuario@IP_DEL_SERVIDOR:~/devdoctor
 ```
 
-### 3. Instalar
+#### 3. Instalar
 
 ```bash
 ssh usuario@IP_DEL_SERVIDOR
@@ -90,27 +111,31 @@ sudo ./install.sh
 Opciones del instalador (se pasan a `devdoctor init`):
 
 ```bash
-sudo ./install.sh --port 8443 --host 203.0.113.10 --user admin --password 'UnaClaveLarga123'
+sudo ./install.sh --port 8443 --host 203.0.113.10
+# Solo para instalaciones desatendidas (scripts): credenciales por línea de comandos
+sudo ./install.sh --user admin --password 'UnaClaveLarga123!'
 ```
 
 | Opción | Descripción | Por defecto |
 |---|---|---|
-| `--port` | Puerto del dashboard | 9443, o el siguiente libre |
+| `--port` | Puerto del dashboard | aleatorio libre entre 61000 y 64999 |
 | `--host` | IP o dominio que aparecerá en la URL | IP de salida del servidor |
-| `--user` | Usuario del dashboard | `admin` |
-| `--password` | Contraseña (mínimo 10 caracteres) | aleatoria de 16 caracteres, se muestra una vez |
+| `--listen` | Interfaz de escucha; usa `127.0.0.1` si lo pondrás detrás de Nginx/Apache | todas |
+| `--password` | Opcional. Si la omites (recomendado), **creas usuario y contraseña en la web** en el primer acceso | — |
+| `--user` | Usuario, solo junto con `--password` | `admin` |
 
 Al terminar verás algo así:
 
 ```
   DevDoctor listo
   ───────────────
-  URL:        https://192.168.0.182:9443
-  Usuario:    admin
-  Contraseña: 7KmQp4xWbN2cRvTz   (cámbiala en el dashboard → Cuenta)
+  URL:        https://192.168.0.182:62817
+  Código:     wGNTZm9jnuMZ
+
+  Abre la URL, introduce el código y crea tu usuario y contraseña en la web.
 ```
 
-> **Firewall:** si usas `ufw`, abre el puerto: `sudo ufw allow 9443/tcp`.
+> **Firewall:** si usas `ufw`, abre el puerto: `sudo ufw allow 62817/tcp`.
 > **Servidores en la nube con IP pública por NAT:** usa `--host IP_PUBLICA`, porque el servidor solo
 > conoce su IP privada. DevDoctor no consulta servicios externos para averiguarla.
 
@@ -118,8 +143,8 @@ Al terminar verás algo así:
 
 1. Abre la URL en tu navegador.
 2. El navegador avisará de un **certificado no confiable**: es normal, es autofirmado. Acepta la
-   excepción (o usa [Nginx con un certificado real](#poner-devdoctor-detrás-de-nginx)).
-3. Inicia sesión y, si la contraseña fue generada, cámbiala en **Cuenta**.
+   excepción (o usa [Nginx o Apache con un certificado real](#poner-devdoctor-detrás-de-nginx-o-apache)).
+3. Verás el asistente **Configuración inicial**: introduce el **código** que mostró el instalador, elige tu **usuario** y tu **contraseña**. Entrarás directamente al dashboard. Más adelante puedes cambiarlos en **Cuenta**. (¿Perdiste el código? `sudo devdoctor setup-code`.)
 4. El primer diagnóstico tarda entre 5 y 30 segundos según cuántos proyectos y contenedores tengas.
 
 ## Comandos
@@ -128,6 +153,7 @@ Al terminar verás algo así:
 devdoctor init     Crea configuración, certificado TLS y usuario
 devdoctor run      Inicia el dashboard (lo que ejecuta systemd)
 devdoctor url      Muestra la URL de acceso
+devdoctor setup-code  Muestra el código para crear la cuenta en la web
 devdoctor passwd   Cambia usuario/contraseña desde la terminal
 devdoctor scan     Ejecuta un diagnóstico en la terminal (--json para salida JSON)
 devdoctor version  Muestra la versión
@@ -153,8 +179,9 @@ Archivo: `/etc/devdoctor/config.json` (permisos `0600`, solo root).
 
 ```json
 {
-  "port": 9443,
+  "port": 62817,
   "host": "192.168.0.182",
+  "listen": "",
   "username": "admin",
   "pass_salt": "…",
   "pass_hash": "…",
@@ -167,6 +194,7 @@ Archivo: `/etc/devdoctor/config.json` (permisos `0600`, solo root).
 | Campo | Descripción |
 |---|---|
 | `port` / `host` | Puerto de escucha y host que se muestra en la URL |
+| `listen` | Interfaz de escucha. Vacío = todas; `127.0.0.1` = solo local (para usar con Nginx/Apache) |
 | `username`, `pass_*` | Credenciales (la contraseña nunca se guarda en claro) |
 | `scan_roots` | Directorios **adicionales** donde buscar proyectos. Siempre se revisan `/var/www`, `/srv`, `/home` y `/opt` |
 | `scan_interval_min` | Minutos entre diagnósticos automáticos (15 por defecto) |
@@ -250,46 +278,164 @@ hunda la nota por completo. Los hallazgos informativos no restan.
 
 ## Seguridad de la propia app
 
-- Contraseña con **PBKDF2-SHA256** (600 000 iteraciones y sal aleatoria); nunca en texto plano.
-- **Bloqueo por IP** durante 15 minutos tras 5 intentos de login fallidos, más un retardo en cada fallo.
-- Sesión en cookie `HttpOnly; Secure; SameSite=Strict`, válida 12 horas; cambiar la contraseña cierra
-  todas las sesiones.
-- Cabeceras `Content-Security-Policy`, `HSTS`, `X-Frame-Options: DENY`, `nosniff` y `no-store`.
-- Las peticiones POST solo se aceptan como `application/json` (frena formularios cross-site).
-- TLS 1.2 como mínimo.
+**Creación de la cuenta**
+- No hay usuario ni contraseña por defecto. En el primer acceso se crean en la web, y solo con el
+  **código de un solo uso** que imprime el instalador (12 caracteres aleatorios); así nadie que
+  encuentre la URL antes que tú puede reclamar la cuenta. El código se destruye al crearla.
+
+**Contraseñas**
+- Guardadas con **PBKDF2-SHA256** (600 000 iteraciones, sal aleatoria); nunca en texto plano.
+- Política: 10–128 caracteres, sin tu nombre de usuario, sin palabras/secuencias comunes
+  (`password`, `123456`, `qwerty`, `admin`…) y con variedad de tipos, salvo que sea una frase de 16+.
+- Verificación en tiempo constante y con el mismo coste exista o no el usuario (no se puede
+  averiguar qué usuarios existen). Máximo 2 verificaciones simultáneas para que una avalancha de
+  intentos no agote la CPU.
+
+**Defensa contra fuerza bruta**
+- **Bloqueo por IP** de 15 minutos tras 5 fallos (login, cambio de cuenta y código de configuración).
+- **Frenado global:** si hay muchos fallos recientes desde cualquier origen (ataque distribuido con
+  muchas IPs), cada intento se retrasa hasta 5 s más, sin bloquear al usuario legítimo.
+- El cambio de contraseña desde **Cuenta** también está limitado, así que una sesión robada no sirve
+  para adivinar la contraseña actual.
+- Detrás de un proxy local solo se confía en `X-Forwarded-For` si la conexión viene de `127.0.0.1`,
+  y se usa el último valor (el que añade tu proxy), para que no se pueda falsificar la IP.
+- **fail2ban:** si está instalado, el instalador crea el filtro y la *jail* `devdoctor`
+  (5 fallos en 10 min → baneo de 1 h) usando el log del servicio.
+
+**Sesiones**
+- Cookie `__Host-dd_session` con `HttpOnly; Secure; SameSite=Strict`, token aleatorio de 256 bits nuevo
+  en cada login (sin fijación de sesión).
+- Caduca a las **12 h** y por **30 min de inactividad**; se ata al navegador (User-Agent); máximo 20
+  sesiones simultáneas. Cambiar usuario/contraseña cierra todas.
+
+**Navegador y red**
+- Protección CSRF triple: `SameSite=Strict`, POST solo `application/json` y verificación de
+  `Origin`/`Sec-Fetch-Site`.
+- `Content-Security-Policy` estricta: sin scripts externos ni `unsafe-inline` en scripts (el script
+  se autoriza por hash), sin iframes, `form-action 'self'`. Además `HSTS`, `X-Frame-Options: DENY`,
+  `nosniff`, `no-store`, `COOP/CORP same-origin` y `Permissions-Policy`.
+- TLS 1.2 como mínimo. Límites de tamaño de petición y cabeceras, y timeouts anti-*slowloris*.
+- Puerto aleatorio alto (61000–64999): poco probable que choque con otra app y no aparece en los
+  escaneos habituales de puertos conocidos.
+
+**Sistema**
 - Servicio systemd con `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`,
   `PrivateTmp` y escritura permitida solo en `/etc/devdoctor`.
 - No hace llamadas a servicios externos por su cuenta (solo `composer audit` / `npm audit`, que
   consultan sus propios registros, y `trivy` si lo instalas).
 
-**Recomendaciones:** no expongas el puerto a todo internet si no hace falta (restríngelo por firewall a
-tu IP o usa una VPN), usa una contraseña larga y, para uso público, ponlo detrás de Nginx con un
-certificado válido.
+**Recomendaciones:** restringe el puerto por firewall a tu IP o usa una VPN si es posible, y para
+uso público ponlo detrás de Nginx o Apache con un certificado válido.
 
-## Poner DevDoctor detrás de Nginx
+## Poner DevDoctor detrás de Nginx o Apache
 
-Para tener un dominio y un certificado reconocido (p. ej. `doctor.midominio.com`):
+Útil para tener un dominio propio (p. ej. `doctor.midominio.com`) con un certificado reconocido por el
+navegador, en el puerto 443. En los ejemplos, `62817` es el puerto de DevDoctor (`devdoctor url`).
+
+Requisitos comunes:
+
+- DevDoctor debe colgar de la **raíz** de un dominio o subdominio (no de una subruta como `/doctor/`).
+- Hay que reenviar la cabecera `Host` original (con puerto, si no es el 443): DevDoctor comprueba que
+  el `Origin` de cada petición coincida con ella como defensa CSRF.
+- Reenvía la IP real del cliente en `X-Forwarded-For`. DevDoctor solo la usa si la conexión llega desde
+  `127.0.0.1`/`::1` (tu proxy) y toma el **último** valor, el que añade tu proxy, así que no se puede falsificar.
+- Obtén el certificado antes: `sudo certbot certonly --nginx -d doctor.midominio.com`
+  (o `--apache`, o `--standalone`).
+
+### Nginx
 
 ```nginx
 server {
+    listen 80;
+    server_name doctor.midominio.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
     listen 443 ssl;
+    http2 on;
     server_name doctor.midominio.com;
 
     ssl_certificate     /etc/letsencrypt/live/doctor.midominio.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/doctor.midominio.com/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
 
     location / {
-        proxy_pass https://127.0.0.1:9443;
-        proxy_ssl_verify off;            # certificado interno autofirmado
-        proxy_set_header Host $host;
+        proxy_pass https://127.0.0.1:62817;
+        proxy_ssl_verify off;                         # certificado interno autofirmado
+        proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 90s;
     }
 }
 ```
 
-Con el proxy, cierra el acceso directo al puerto 9443 en el firewall. Ten en cuenta que el bloqueo por
-IP de DevDoctor verá la IP del proxy (`127.0.0.1`) y no la del visitante, por lo que los intentos fallidos
-se contarán en conjunto; limita también los intentos en Nginx con `limit_req`.
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### Apache
+
+Activa los módulos y el sitio:
+
+```bash
+sudo a2enmod ssl proxy proxy_http headers rewrite
+sudo a2ensite doctor.conf
+sudo apachectl configtest && sudo systemctl reload apache2     # RHEL/Alma: httpd
+```
+
+`/etc/apache2/sites-available/doctor.conf` (en RHEL: `/etc/httpd/conf.d/doctor.conf`):
+
+```apache
+<VirtualHost *:80>
+    ServerName doctor.midominio.com
+    RewriteEngine On
+    RewriteRule ^/?(.*) https://%{SERVER_NAME}/$1 [R=301,L]
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName doctor.midominio.com
+
+    SSLEngine on
+    SSLCertificateFile    /etc/letsencrypt/live/doctor.midominio.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/doctor.midominio.com/privkey.pem
+    SSLProtocol           -all +TLSv1.2 +TLSv1.3
+
+    # Conexión interna hacia DevDoctor (certificado autofirmado)
+    SSLProxyEngine on
+    SSLProxyVerify none
+    SSLProxyCheckPeerCN off
+    SSLProxyCheckPeerName off
+    SSLProxyCheckPeerExpire off
+
+    ProxyPreserveHost On
+    ProxyAddHeaders On                      # añade X-Forwarded-For con la IP real del cliente
+    RequestHeader set X-Forwarded-Proto "https"
+    ProxyTimeout 90
+
+    ProxyPass        / https://127.0.0.1:62817/
+    ProxyPassReverse / https://127.0.0.1:62817/
+</VirtualHost>
+```
+
+### Después de configurar el proxy
+
+1. Haz que DevDoctor solo escuche en local: pon `"listen": "127.0.0.1"` en `/etc/devdoctor/config.json`
+   (o instala con `--listen 127.0.0.1`) y reinicia: `sudo systemctl restart devdoctor`. Así el puerto
+   ya no es alcanzable desde fuera y solo se entra por el proxy.
+2. Opcional: en `/etc/devdoctor/config.json` pon `"host": "doctor.midominio.com"` y reinicia, para que
+   `devdoctor url` muestre tu dominio.
+3. La protección anti fuerza bruta de DevDoctor sigue funcionando por IP real gracias a
+   `X-Forwarded-For`. Para una capa extra, limita también en el proxy
+   (Nginx: `limit_req_zone`; Apache: `mod_evasive` o `mod_security`).
+4. Si fail2ban está instalado, su jail `devdoctor` baneará la IP real; como el puerto que protege es el
+   de DevDoctor y tu tráfico llega por el proxy, cambia su acción a bloquear el 443 en
+   `/etc/fail2ban/jail.d/devdoctor.local` (`port = https,http`).
+
+> **Comprobación rápida:** abre `https://doctor.midominio.com`, inicia sesión y mira el log
+> (`journalctl -u devdoctor -f`); si ves `login fallido desde 127.0.0.1` en lugar de tu IP, el proxy no
+> está enviando `X-Forwarded-For`.
 
 ## API
 

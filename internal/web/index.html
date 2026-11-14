@@ -15,8 +15,9 @@ button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-col
 input{font:inherit;width:100%;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
 input:focus{outline:2px solid var(--acc);outline-offset:-1px}
 .hidden{display:none!important}
-#login{min-height:100vh;display:grid;place-items:center;padding:16px}
+#login,#setup{min-height:100vh;display:grid;place-items:center;padding:16px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+#setup{padding:16px}
 #login .card{width:100%;max-width:360px;display:grid;gap:12px}
 h1{font-size:20px;margin:0}h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
 .err{color:var(--crit);min-height:1.2em;font-size:13px}
@@ -60,6 +61,19 @@ dialog::backdrop{background:#0008}dialog form{display:grid;gap:10px}
     <label>Contraseña<input id="lp" type="password" autocomplete="current-password" required></label>
     <div class="err" id="le"></div>
     <button class="pri">Entrar</button>
+  </form>
+</div>
+
+<div id="setup" class="hidden">
+  <form class="card" id="sf" style="width:100%;max-width:400px;display:grid;gap:12px;margin:auto">
+    <div class="brand" style="font-size:22px">Dev<b>Doctor</b></div>
+    <div><b>Configuración inicial</b><div class="muted">Crea tu usuario y contraseña. El código de configuración se mostró en la terminal al instalar (o ejecuta <code>sudo devdoctor setup-code</code>).</div></div>
+    <label>Código de configuración<input id="st" autocomplete="off" required></label>
+    <label>Usuario<input id="su" autocomplete="username" minlength="3" required></label>
+    <label>Contraseña (mín. 10 caracteres)<input id="sp" type="password" autocomplete="new-password" minlength="10" required></label>
+    <label>Repite la contraseña<input id="sr" type="password" autocomplete="new-password" required></label>
+    <div class="err" id="se"></div>
+    <button class="pri">Crear cuenta y entrar</button>
   </form>
 </div>
 
@@ -123,7 +137,7 @@ function spark(arr,color,max){arr=arr||[];if(arr.length<2)return'<svg class="spa
   const pts=arr.map((v,i)=>(i*st).toFixed(1)+','+(h-2-(v/m)*(h-6)).toFixed(1)).join(' ');
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polygon points="0,${h} ${pts} ${w},${h}" fill="${color}" opacity=".15"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`}
 
-function showLogin(){timers.forEach(clearInterval);timers=[];$('#app').classList.add('hidden');$('#login').classList.remove('hidden');$('#lu').focus()}
+function showLogin(){$('#setup').classList.add('hidden');timers.forEach(clearInterval);timers=[];$('#app').classList.add('hidden');$('#login').classList.remove('hidden');$('#lu').focus()}
 async function showApp(){$('#login').classList.add('hidden');$('#app').classList.remove('hidden');
   await Promise.all([pollMetrics(),pollReport()]);
   timers.push(setInterval(()=>pollMetrics().catch(()=>{}),2000),setInterval(()=>pollReport().catch(()=>{}),SCANNING?2000:10000))}
@@ -189,7 +203,12 @@ $('#ax').onclick=()=>$('#acct').close();
 $('#af').onsubmit=async e=>{e.preventDefault();$('#ae').textContent='';
   try{await api('account',{current:$('#ac').value,username:$('#au').value,password:$('#an').value});$('#acct').close();['#ac','#au','#an'].forEach(s=>$(s).value='');alert('Cuenta actualizada. Inicia sesión de nuevo.');showLogin()}catch(x){$('#ae').textContent=x.message||''}};
 
-api('me').then(showApp).catch(()=>showLogin());
+$('#sf').onsubmit=async e=>{e.preventDefault();$('#se').textContent='';
+  if($('#sp').value!==$('#sr').value){$('#se').textContent='Las contraseñas no coinciden';return}
+  try{await api('setup',{token:$('#st').value.trim(),username:$('#su').value,password:$('#sp').value});['#st','#sp','#sr'].forEach(s=>$(s).value='');$('#setup').classList.add('hidden');await showApp()}catch(x){$('#se').textContent=x.message||''}};
+
+(async()=>{try{const s=await(await fetch('/api/status')).json();if(s.setup){$('#setup').classList.remove('hidden');$('#st').focus();return}}catch{}
+  api('me').then(showApp).catch(()=>showLogin())})();
 </script>
 </body>
 </html>
