@@ -91,7 +91,20 @@ main{padding:22px 24px 48px;max-width:1320px;margin:0 auto;display:grid;gap:16px
 .spark{width:100%;height:44px;margin-top:6px;display:block}
 
 /* disks */
-.disks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(270px,100%),1fr));gap:12px}
+.disks{display:grid;grid-template-columns:repeat(var(--dcols,3),minmax(0,1fr));gap:12px}
+@media(max-width:1100px){.disks{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.disks{grid-template-columns:1fr}}
+.acc{padding:0}
+.acc summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:14px;padding:16px 18px;user-select:none}
+.acc summary::-webkit-details-marker{display:none}
+.acc-t{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.psum{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0;justify-content:flex-end}
+.psum .tag{padding:3px 10px;font-size:12px}.psum .tag b{font-variant-numeric:tabular-nums}
+.acc .chev{color:var(--mut);transition:transform .2s}
+.acc[open] .chev{transform:rotate(180deg)}
+.acc[open] .psum{visibility:hidden}
+.acc .procs{padding:0 18px 18px}
+.acc summary:hover .chev{color:var(--text)}
 .disk{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:16px;min-width:0}
 .disk svg{width:72px;height:72px;flex:none}.disk text{fill:var(--text);font-weight:800;font-size:19px}
 .disk .dt{min-width:0;display:grid;gap:3px}
@@ -131,7 +144,11 @@ main{padding:22px 24px 48px;max-width:1320px;margin:0 auto;display:grid;gap:16px
 .sev{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
 .f pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--mut);font-size:12.5px;font-family:inherit}
 .fix{margin-top:10px;display:flex;gap:10px;align-items:flex-start;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 12px}
-.fix code{flex:1;word-break:break-word;white-space:pre-wrap;padding-top:3px}
+.fix code{flex:1;min-width:0;overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;padding-top:3px}
+.f>div{min-width:0}
+main>*{min-width:0}
+.card{min-width:0}
+#tabBody{min-width:0}
 .fix button{padding:5px 8px;font-size:12px}
 .empty{display:grid;justify-items:center;gap:8px;padding:34px;color:var(--mut)}
 .empty svg{width:34px;height:34px;color:var(--ok)}
@@ -159,6 +176,22 @@ tbody tr:hover td{background:color-mix(in srgb,var(--panel2) 60%,transparent)}
 @keyframes scanfloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-9px) scale(1.035)}}
 @keyframes scanslide{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
 @media (prefers-reduced-motion:reduce){.scan-logo,.scan-bar i{animation:none}}
+textarea{font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;width:100%;min-height:110px;resize:vertical;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;line-height:1.6}
+textarea:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.hint{font-weight:400;font-size:12px;color:var(--mut);line-height:1.5}
+.ok-note{color:var(--ok);min-height:1.3em;font-size:13px}
+dialog.wide{width:min(620px,94vw);max-height:92vh;overflow:auto}
+select{font:inherit;font-weight:400;width:100%;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+select:focus{outline:2px solid var(--acc);outline-offset:-1px}
+input[type=checkbox]{width:auto;accent-color:var(--acc);margin:0}
+label.chk{display:flex;align-items:center;gap:10px}
+.sect{display:grid;gap:14px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.sect-t{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+.sect label{margin:0}
+.lnk{display:inline-flex;align-items:center;gap:6px;color:var(--info);text-decoration:none;font-size:12.5px;font-weight:600;margin-top:8px}
+.lnk:hover{text-decoration:underline}
+.res-ok{color:var(--ok)}.res-err{color:var(--crit)}
+.srcs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:var(--r);padding:24px;width:min(420px,92vw);box-shadow:var(--shadow)}
 dialog::backdrop{background:#000a;backdrop-filter:blur(3px)}
 dialog form{display:grid;gap:18px}
@@ -190,6 +223,10 @@ dialog form{display:grid;gap:18px}
 <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
 <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
 <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.8 9.8 0 0112 6c6 0 10 6 10 6a17 17 0 01-3.2 3.9M6.6 6.7C3.7 8.5 2 12 2 12s4 7 10 7c1.5 0 2.9-.4 4.1-1"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.7-1.7"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></symbol>
 <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></symbol>
 <symbol id="i-okc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
@@ -236,6 +273,7 @@ dialog form{display:grid;gap:18px}
     <div class="sp"></div>
     <div class="lang" data-lang></div>
     <button id="scanBtn" class="pri"><svg class="i sm"><use href="#i-scan"/></svg><span class="lbl" id="scanLbl"></span></button>
+    <button id="setBtn" class="ghost"><svg class="i sm"><use href="#i-gear"/></svg><span class="lbl" data-i18n="settings"></span></button>
     <button id="acctBtn" class="ghost"><svg class="i sm"><use href="#i-user"/></svg><span class="lbl" data-i18n="account"></span></button>
     <button id="outBtn" class="ghost"><svg class="i sm"><use href="#i-out"/></svg><span class="lbl" data-i18n="signOut"></span></button>
   </header>
@@ -256,7 +294,10 @@ dialog form{display:grid;gap:18px}
 
     <section class="stack">
       <div class="card"><h2><svg class="i sm"><use href="#i-disk"/></svg><span data-i18n="disks"></span></h2><div class="disks" id="disks"></div></div>
-      <div class="card"><h2><svg class="i sm"><use href="#i-cpu"/></svg><span data-i18n="topProcs"></span></h2><div class="procs" id="procs"></div></div>
+      <details class="card acc" id="procBox">
+        <summary><span class="acc-t"><svg class="i sm"><use href="#i-cpu"/></svg><span data-i18n="topProcs"></span></span><span class="psum" id="procSum"></span><svg class="i chev"><use href="#i-chev"/></svg></summary>
+        <div class="procs" id="procs"></div>
+      </details>
     </section>
 
     <section class="card">
@@ -275,6 +316,31 @@ dialog form{display:grid;gap:18px}
     <div class="scan-s" id="scanS"></div>
   </div>
 </div>
+
+<dialog id="settings" class="wide">
+  <form id="setf">
+    <div class="brand" style="font-size:16px"><svg class="i"><use href="#i-gear"/></svg><span data-i18n="settings"></span></div>
+    <label><span data-i18n="foldersLabel"></span><textarea id="sRoots" spellcheck="false" placeholder="/srv/apps&#10;/data/sites"></textarea><span class="hint" data-i18n="foldersHelp"></span></label>
+    <label><span data-i18n="urlsLabel"></span><textarea id="sUrls" spellcheck="false" placeholder="https://example.com&#10;https://app.example.com/health"></textarea><span class="hint" data-i18n="urlsHelp"></span></label>
+    <div class="sect">
+      <div class="sect-t" data-i18n="intelTitle"></div>
+      <label class="chk"><input type="checkbox" id="sIntel"><span data-i18n="intelLabel"></span></label>
+      <span class="hint" data-i18n="intelHelp"></span>
+    </div>
+    <div class="sect">
+      <div class="sect-t" data-i18n="notifTitle"></div>
+      <span class="hint" data-i18n="notifHelp"></span>
+      <label><span data-i18n="tgToken"></span><input id="nTgTok" type="password" autocomplete="off" spellcheck="false" placeholder="123456789:AAE..."><span class="hint" id="nTgState"></span></label>
+      <label><span data-i18n="tgChat"></span><input id="nTgChat" autocomplete="off" spellcheck="false" placeholder="123456789  /  @channel"><span class="hint" data-i18n="tgHelp"></span></label>
+      <label><span data-i18n="slackHook"></span><input id="nSlack" type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/..."><span class="hint" id="nSlState"></span><span class="hint" data-i18n="slackHelp"></span></label>
+      <label><span data-i18n="minSev"></span><select id="nSev"><option value="crit" data-i18n="sevCrit"></option><option value="warn" data-i18n="sevWarn"></option></select></label>
+      <label class="chk"><input type="checkbox" id="nRec"><span data-i18n="recoveryL"></span></label>
+      <div class="row"><button type="button" id="nTest" data-i18n="sendTest"></button><span id="nRes" class="hint"></span></div>
+    </div>
+    <div class="err" id="sErr"></div>
+    <div class="row" style="justify-content:flex-end"><button type="button" id="sx" data-i18n="cancel"></button><button class="pri" data-i18n="saveScan"></button></div>
+  </form>
+</dialog>
 
 <dialog id="acct">
   <form id="af">
@@ -301,7 +367,7 @@ en:{setupTitle:'Initial setup',setupHelp:'Create your username and password. The
  disks:'Disks',topProcs:'Top processes by CPU',newUser:'New username (optional)',newPassOpt:'New password (optional, min. 10)',currentPass:'Current password',cancel:'Cancel',save:'Save',
  passMismatch:'The passwords do not match',acctUpdated:'Account updated. Please sign in again.',showPass:'Show password',hidePass:'Hide password',copy:'Copy',copied:'Copied',
  cpu:'CPU',memory:'Memory',network:'Network',load:'Load (1/5/15)',uptime:'Uptime',cores:'cores',of:'of',noSwap:'no swap',swap:'Swap',zombies:'zombies',inodes:'Inodes at',
- free:'free',used:'used',user:'user',sys:'system',iowait:'I/O wait',steal:'steal',cached:'cache',avail:'available',diskIO:'Disk I/O',errors:'errors',perCore:'per core',booted:'booted',conns:'TCP connections',established:'established',listening:'listening',procsT:'Processes',threads:'threads',running:'running',temp:'Temperature',hottest:'hottest sensor',tFindings:'Findings',tPorts:'Ports',tServices:'Services',tSsl:'SSL',tVersions:'Versions',tProjects:'Projects',tContainers:'Containers',tSecurity:'Security',
+ free:'free',used:'used',intelTitle:'Security sources',intelLabel:'Check public security sources online',intelHelp:'php.net, nodejs.org, endoflife.date, CISA KEV, NVD, OSV.dev, Ubuntu Security and GitHub Advisories. Only software names and versions are sent, never data about your server.',notifTitle:'Notifications',notifHelp:'Get a message when a new problem is detected, including alerts from the public security sources. Each problem is sent once, not repeated at every scan.',tgToken:'Telegram bot token',tgChat:'Telegram chat ID',tgHelp:'Create a bot with @BotFather (/newbot), write to it, then get your chat ID from @userinfobot.',slackHook:'Slack webhook URL',slackHelp:'Create an Incoming Webhook at api.slack.com/messaging/webhooks.',minSev:'Notify about',sevCrit:'Critical issues only',sevWarn:'Critical issues and warnings',recoveryL:'Also notify when a problem is resolved',sendTest:'Send test message',testOk:'message sent',savedKeep:'A value is saved. Leave empty to keep it.',remove:'Remove',willRemove:'It will be removed when you save.',tAdvisories:'Alerts',c_Advisories:'Security alerts',sources:'Sources checked',intelOff:'Online security checks are turned off. Turn them on in Settings.',details:'Details',cachedData:'using cached data',settings:'Settings',foldersLabel:'Extra folders to search for projects (one per line)',foldersHelp:'Always searched: /var/www, /srv, /home, /opt, the Nginx/Apache document roots and the folders mounted by Docker containers.',urlsLabel:'Websites to monitor (one URL per line)',urlsHelp:'Each scan checks availability, response time, SSL certificate, HTTPS redirect and security headers.',saveScan:'Save and scan',tSites:'Websites',url:'URL',latency:'Latency',headers:'Headers',headersOk:'complete',down:'down',configure:'Configure',noSites:'No websites configured yet. Add the URLs you want to monitor.',c_Websites:'Websites',folderTag:'folder',noProjects:'No projects found. Searched in:',noRoots:'(no folders found)',addRootsHelp:'Projects are detected by composer.json, package.json, wp-config.php or an index.php/index.html in a web folder. To search another folder run on the server: sudo devdoctor paths add /path/to/projects',user:'user',sys:'system',iowait:'I/O wait',steal:'steal',cached:'cache',avail:'available',diskIO:'Disk I/O',errors:'errors',perCore:'per core',booted:'booted',conns:'TCP connections',established:'established',listening:'listening',procsT:'Processes',threads:'threads',running:'running',temp:'Temperature',hottest:'hottest sensor',tFindings:'Findings',tPorts:'Ports',tServices:'Services',tSsl:'SSL',tVersions:'Versions',tProjects:'Projects',tContainers:'Containers',tSecurity:'Security',
  all:'All',crit:'Critical',warn:'Warning',info:'Info',noFindings:'No findings here. Everything looks good.',nothing:'Nothing to show.',
  port:'Port',proto:'Proto',listen:'Listening on',process:'Process',state:'State',publicP:'Public',localP:'Local only',
  service:'Service',status:'Status',boot:'On boot',domains:'Domains',issuer:'Issuer',expires:'Expires',days:'Days',path:'Path',selfSigned:'self-signed',
@@ -316,7 +382,7 @@ es:{setupTitle:'Configuración inicial',setupHelp:'Crea tu usuario y contraseña
  disks:'Discos',topProcs:'Procesos con más CPU',newUser:'Nuevo usuario (opcional)',newPassOpt:'Nueva contraseña (opcional, mín. 10)',currentPass:'Contraseña actual',cancel:'Cancelar',save:'Guardar',
  passMismatch:'Las contraseñas no coinciden',acctUpdated:'Cuenta actualizada. Inicia sesión de nuevo.',showPass:'Mostrar contraseña',hidePass:'Ocultar contraseña',copy:'Copiar',copied:'Copiado',
  cpu:'CPU',memory:'Memoria',network:'Red',load:'Carga (1/5/15)',uptime:'Uptime',cores:'núcleos',of:'de',noSwap:'sin swap',swap:'Swap',zombies:'zombies',inodes:'Inodos al',
- free:'libres',used:'usado',user:'usuario',sys:'sistema',iowait:'espera E/S',steal:'steal',cached:'caché',avail:'disponible',diskIO:'E/S de disco',errors:'errores',perCore:'por núcleo',booted:'arranque',conns:'Conexiones TCP',established:'establecidas',listening:'escuchando',procsT:'Procesos',threads:'hilos',running:'en ejecución',temp:'Temperatura',hottest:'sensor más caliente',
+ free:'libres',used:'usado',intelTitle:'Fuentes de seguridad',intelLabel:'Consultar fuentes públicas de seguridad online',intelHelp:'php.net, nodejs.org, endoflife.date, CISA KEV, NVD, OSV.dev, Ubuntu Security y GitHub Advisories. Solo se envían nombres y versiones de software, nunca datos de tu servidor.',notifTitle:'Notificaciones',notifHelp:'Recibe un mensaje cuando se detecte un problema nuevo, incluidas las alertas de las fuentes públicas de seguridad. Cada problema se envía una vez, no se repite en cada escaneo.',tgToken:'Token del bot de Telegram',tgChat:'ID del chat de Telegram',tgHelp:'Crea un bot con @BotFather (/newbot), escríbele y obtén tu ID de chat con @userinfobot.',slackHook:'URL del webhook de Slack',slackHelp:'Crea un Incoming Webhook en api.slack.com/messaging/webhooks.',minSev:'Avisar de',sevCrit:'Solo problemas críticos',sevWarn:'Críticos y avisos',recoveryL:'Avisar también cuando un problema se resuelva',sendTest:'Enviar mensaje de prueba',testOk:'mensaje enviado',savedKeep:'Hay un valor guardado. Déjalo vacío para conservarlo.',remove:'Quitar',willRemove:'Se quitará al guardar.',tAdvisories:'Alertas',c_Advisories:'Alertas de seguridad',sources:'Fuentes consultadas',intelOff:'Las consultas de seguridad online están desactivadas. Actívalas en Configuración.',details:'Detalles',cachedData:'usando datos en caché',settings:'Configuración',foldersLabel:'Carpetas extra donde buscar proyectos (una por línea)',foldersHelp:'Siempre se revisan: /var/www, /srv, /home, /opt, los docroots de Nginx/Apache y las carpetas montadas por contenedores Docker.',urlsLabel:'Sitios web a vigilar (una URL por línea)',urlsHelp:'En cada escaneo se comprueba disponibilidad, tiempo de respuesta, certificado SSL, redirección a HTTPS y cabeceras de seguridad.',saveScan:'Guardar y escanear',tSites:'Sitios web',url:'URL',latency:'Latencia',headers:'Cabeceras',headersOk:'completas',down:'caído',configure:'Configurar',noSites:'Aún no hay sitios configurados. Añade las URLs que quieras vigilar.',c_Websites:'Sitios web',folderTag:'carpeta',noProjects:'No se encontraron proyectos. Se buscó en:',noRoots:'(no hay carpetas)',addRootsHelp:'Los proyectos se detectan por composer.json, package.json, wp-config.php o un index.php/index.html en una carpeta web. Para buscar en otra carpeta ejecuta en el servidor: sudo devdoctor paths add /ruta/de/tus/proyectos',user:'usuario',sys:'sistema',iowait:'espera E/S',steal:'steal',cached:'caché',avail:'disponible',diskIO:'E/S de disco',errors:'errores',perCore:'por núcleo',booted:'arranque',conns:'Conexiones TCP',established:'establecidas',listening:'escuchando',procsT:'Procesos',threads:'hilos',running:'en ejecución',temp:'Temperatura',hottest:'sensor más caliente',
  tFindings:'Hallazgos',tPorts:'Puertos',tServices:'Servicios',tSsl:'SSL',tVersions:'Versiones',tProjects:'Proyectos',tContainers:'Contenedores',tSecurity:'Seguridad',
  all:'Todos',crit:'Crítico',warn:'Aviso',info:'Info',noFindings:'Sin hallazgos aquí. Todo en orden.',nothing:'Nada que mostrar.',
  port:'Puerto',proto:'Proto',listen:'Escucha en',process:'Proceso',state:'Estado',publicP:'Pública',localP:'Solo local',
@@ -337,7 +403,8 @@ const ERR_ES={'not authenticated':'No autenticado','too many attempts; wait 15 m
 let LANG='en';try{LANG=localStorage.getItem('dd_lang')||''}catch{}
 if(!['en','es'].includes(LANG))LANG=(navigator.language||'en').toLowerCase().startsWith('es')?'es':'en';
 const t=k=>(T[LANG][k]??T.en[k]??k);
-const errMsg=m=>LANG==='es'?(ERR_ES[m]||m):m;
+const ERR_PFX=[['invalid folder (must be an absolute path):','Carpeta no válida (debe ser una ruta absoluta):'],['invalid folder: scanning the whole filesystem (/) is not allowed','Carpeta no válida: no se permite escanear todo el sistema de archivos (/)'],['invalid URL (use http:// or https://):','URL no válida (usa http:// o https://):'],['invalid URL (credentials are not allowed):','URL no válida (no se permiten credenciales):'],['invalid URL (address not allowed):','URL no válida (dirección no permitida):'],['too many folders','Demasiadas carpetas (máximo 30)'],['too many URLs','Demasiadas URLs (máximo 30)'],['telegram needs both','Telegram necesita el token del bot y el ID del chat'],['invalid Telegram bot token','Formato de token de Telegram no válido'],['invalid Telegram chat ID','ID de chat de Telegram no válido (usa el ID numérico o @canal)'],['invalid Slack webhook','URL de webhook de Slack no válida (debe ser https://hooks.slack.com/services/...)'],['no notification channel','No hay ningún canal de notificación configurado']];
+const errMsg=m=>{if(LANG!=='es')return m;if(ERR_ES[m])return ERR_ES[m];for(const [k,v] of ERR_PFX)if(m.startsWith(k))return v+m.slice(k.length);return m};
 
 function applyLang(){
   document.documentElement.lang=LANG;
@@ -365,7 +432,7 @@ const dur=s=>{s=Math.floor(s);const d=Math.floor(s/86400),h=Math.floor(s%86400/3
 const col=p=>p>=90?'var(--crit)':p>=75?'var(--warn)':'var(--ok)';
 const dot=k=>`<span class="dot ${k}"></span>`;
 const SEVK={crit:'crit',warn:'warn',info:'info',ok:'ok'};
-const CATICON={Versions:'layers',Ports:'globe',Services:'server',SSL:'lock',Permissions:'key',Dependencies:'pkg',Docker:'box',Security:'shield',Resources:'gauge'};
+const CATICON={Versions:'layers',Ports:'globe',Services:'server',SSL:'lock',Permissions:'key',Dependencies:'pkg',Docker:'box',Security:'shield',Resources:'gauge',Websites:'link',Advisories:'bell'};
 let MANUAL=false,SCAN_T0=0,SCAN_TMR=null,POLL_T=null,timers=[],tab='findings',sevF='all',REP=null,SCANNING=false,LAST_M=null;
 
 function spark(arr,color,max){arr=arr||[];if(arr.length<2)return'<svg class="spark"></svg>';
@@ -428,7 +495,9 @@ function renderMetrics(m){
   if(m.temp_c>0)cards.push(card('gauge',t('temp'),'<span style="color:'+(m.temp_c>=85?'var(--crit)':m.temp_c>=70?'var(--warn)':'var(--ok)')+'">'+m.temp_c.toFixed(0)+' °C</span>',t('hottest')));
   const n=cards.length;$('#kpis').style.setProperty('--cols',n===9?3:n%4===0?4:n%3===0?3:4); // filas completas
   $('#kpis').innerHTML=cards.join('');
+  const dn=(m.disks||[]).length;$('#disks').style.setProperty('--dcols',dn<=4?Math.max(dn,1):dn===5?5:dn%4===0?4:dn%3===0?3:4);
   $('#disks').innerHTML=(m.disks||[]).map(d=>`<div class="disk">${donut(d.pct)}<div class="dt"><div class="m mono" title="${esc(d.mount)}">${esc(d.mount)}</div><div class="u">${bytes(d.used)} / ${bytes(d.total)} · ${esc(d.type)}</div><div class="u">${bytes(d.total-d.used)} ${t('free')}${d.inode_pct>=70?` · <span class="warn">${t('inodes')} ${d.inode_pct}%</span>`:''}</div></div></div>`).join('')||`<span class="muted">${t('nothing')}</span>`;
+  $('#procSum').innerHTML=(m.procs||[]).slice(0,3).map(p=>`<span class="tag">${esc(p.cmd)} <b style="color:${col(p.cpu)}">${p.cpu}%</b></span>`).join('');
   $('#procs').innerHTML=(m.procs||[]).map(p=>`<div class="proc"><div class="av" style="background:${procColor(p.cmd)}">${esc((p.cmd[0]||'?').toUpperCase())}</div><div style="min-width:0"><div class="nm"><b>${esc(p.cmd)}</b><span class="mini mono">PID ${p.pid}</span><span class="mini">${esc(p.user)}</span></div>
     <div class="meters"><div class="meter"><div class="t"><span>CPU</span><b>${p.cpu}%</b></div><div class="bar"><i style="width:${Math.min(p.cpu,100)}%;background:${col(p.cpu)}"></i></div></div>
     <div class="meter"><div class="t"><span>MEM</span><b>${p.mem}%</b></div><div class="bar"><i style="width:${Math.min(p.mem*3,100)}%;background:var(--info)"></i></div></div></div></div></div>`).join('');
@@ -446,7 +515,7 @@ function renderReport(){
   renderTabs();
 }
 
-const TABS=[['findings','list','tFindings',null],['ports','globe','tPorts',['Ports']],['services','server','tServices',['Services']],['ssl','lock','tSsl',['SSL']],['versions','layers','tVersions',['Versions']],
+const TABS=[['findings','list','tFindings',null],['advisories','bell','tAdvisories',['Advisories']],['ports','globe','tPorts',['Ports']],['services','server','tServices',['Services']],['ssl','lock','tSsl',['SSL']],['sites','link','tSites',['Websites']],['versions','layers','tVersions',['Versions']],
  ['projects','pkg','tProjects',['Dependencies']],['containers','box','tContainers',['Docker']],['security','shield','tSecurity',['Security','Permissions','Resources']]];
 
 function badge(cats,r){const fs=(r.findings||[]).filter(f=>!cats||cats.includes(f.category));const c=fs.filter(f=>f.severity==='crit').length,w=fs.filter(f=>f.severity==='warn').length;
@@ -457,6 +526,7 @@ function findings(list){
   return`<div class="fl">`+list.map((f,i)=>`<div class="f"><div class="ic">${ic(CATICON[f.category]||'shield')}</div><div>
     <div class="meta"><span class="sev ${f.severity}">${dot(f.severity)}${t(f.severity)}</span><span class="cat">${esc(t('c_'+f.category))}</span></div>
     <div class="t">${esc(f.title)}</div>${f.detail?`<pre>${esc(f.detail)}</pre>`:''}
+    ${f.link&&/^https:\/\//.test(f.link)?`<a class="lnk" href="${esc(f.link)}" target="_blank" rel="noopener noreferrer">${ic('link','sm')}${t('details')}</a>`:''}
     ${f.fix?`<div class="fix"><code>${esc(f.fix)}</code><button type="button" data-copy="${esc(f.fix)}" title="${t('copy')}">${ic('copy','sm')}</button></div>`:''}</div></div>`).join('')+`</div>`;
 }
 const tbl=(head,rows)=>rows.length?`<div class="tw"><table><thead><tr>${head.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`:`<div class="empty muted">${t('nothing')}</div>`;
@@ -466,11 +536,18 @@ function renderTabs(){
   $('#tabs').innerHTML=TABS.map(([id,icon,label,cats])=>`<button data-t="${id}" class="${id===tab?'on':''}">${ic(icon,'sm')}${t(label)}${badge(cats,r)}</button>`).join('');
   const F=r.findings||[],cat=c=>F.filter(f=>c.includes(f.category));let h='';
   if(tab==='findings')h=`<div class="filters">${['all','crit','warn','info'].map(k=>`<button data-s="${k}" class="${sevF===k?'on':''}">${k!=='all'?dot(k):''}${t(k)}</button>`).join('')}</div>`+findings(F.filter(f=>sevF==='all'||f.severity===sevF));
+  else if(tab==='advisories'){const it=r.intel;
+    const srcs=it&&it.enabled?'<div class="muted" style="margin-bottom:8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:700">'+t('sources')+'</div><div class="srcs">'+(it.sources||[]).map(s=>{const k=!s.ok?'crit':s.cached&&s.error?'warn':'ok';return '<span class="tag" title="'+esc((s.error?s.error+' · ':'')+new Date(s.at).toLocaleString(LANG)+(s.cached?' · '+t('cachedData'):''))+'">'+dot(k)+esc(s.name)+'</span>'}).join('')+'</div>':'<div class="empty muted">'+ic('bell')+'<div>'+t('intelOff')+'</div></div>';
+    h=srcs+findings(cat(['Advisories']))}
   else if(tab==='ports')h=tbl([t('port'),t('proto'),t('listen'),t('process'),t('state')],(r.ports||[]).map(p=>`<tr><td><b>${p.port}</b></td><td>${esc(p.proto)}</td><td class="mono">${esc(p.addr)}</td><td>${esc(p.process||'-')}${p.pid?` <span class="muted">(${p.pid})</span>`:''}</td><td>${p.note?`<span class="st crit">${dot('crit')}${esc(p.note)}</span>`:p.exposed?`<span class="st warn">${dot('warn')}${t('publicP')}</span>`:`<span class="st ok">${dot('ok')}${t('localP')}</span>`}</td></tr>`))+'<div class="gap"></div>'+findings(cat(['Ports']));
   else if(tab==='services')h=tbl([t('service'),t('status'),t('boot')],(r.services||[]).map(s=>{const k=s.active==='active'?'ok':s.enabled==='enabled'?'crit':'mut';return`<tr><td><b>${esc(s.name)}</b></td><td><span class="st ${k}">${dot(k)}${esc(s.active)}</span></td><td class="muted">${esc(s.enabled)}</td></tr>`}))+'<div class="gap"></div>'+findings(cat(['Services']));
   else if(tab==='ssl')h=tbl([t('domains'),t('issuer'),t('expires'),t('days'),t('path')],(r.certs||[]).map(c=>{const k=c.days_left<=14?'crit':c.days_left<=30?'warn':'ok';return`<tr><td>${esc(c.dns&&c.dns.length?c.dns.join(', '):c.subject)}${c.self_signed?` <span class="tag" style="padding:1px 8px">${t('selfSigned')}</span>`:''}</td><td>${esc(c.issuer)}</td><td>${new Date(c.not_after).toLocaleDateString(LANG)}</td><td><span class="st ${k}">${dot(k)}${c.days_left}</span></td><td class="mono muted">${esc(c.path)}</td></tr>`}))+'<div class="gap"></div>'+findings(cat(['SSL']).filter(f=>!/expire|EXPIRED|expira|EXPIRADO/.test(f.title)));
+  else if(tab==='sites'){const us=r.urls||[];
+    h=(us.length?tbl([t('url'),t('state'),t('latency'),'SSL','TLS',t('headers')],us.map(u=>{const down=!u.status;const sk=down?'crit':u.status>=500?'crit':u.status>=400?'warn':'ok';const lk=u.latency_ms>3000?'crit':u.latency_ms>1500?'warn':'ok';const dk=!u.has_tls?'mut':u.days_left<=14?'crit':u.days_left<=30?'warn':'ok';
+      return '<tr><td class="mono">'+esc(u.url)+(u.final&&u.final!==u.url?'<div class="muted">→ '+esc(u.final)+'</div>':'')+'</td><td><span class="st '+sk+'">'+dot(sk)+(down?t('down'):u.status)+'</span>'+(u.error?'<div class="muted">'+esc(u.error)+'</div>':'')+'</td><td><span class="st '+(down?'mut':lk)+'">'+dot(down?'mut':lk)+(down?'-':u.latency_ms+' ms')+'</span></td><td><span class="st '+dk+'">'+dot(dk)+(u.has_tls?u.days_left+' d':'-')+'</span></td><td>'+esc(u.tls||'-')+'</td><td>'+(!u.has_tls?'<span class="muted">-</span>':(u.missing&&u.missing.length?u.missing.slice(0,3).map(x=>'<span class="tag" style="padding:1px 8px;font-size:11px">'+esc(x)+'</span>').join(' ')+(u.missing.length>3?' <span class="muted">+'+(u.missing.length-3)+'</span>':''):'<span class="st ok">'+dot('ok')+t('headersOk')+'</span>'))+'</td></tr>'})):'<div class="empty">'+ic('link')+'<div>'+t('noSites')+'</div></div>')
+      +'<div class="row" style="margin:12px 0"><button type="button" data-open-settings>'+ic('gear','sm')+t('configure')+'</button></div>'+findings(cat(['Websites']))}
   else if(tab==='versions')h=tbl([t('software'),t('version'),t('status')],(r.versions||[]).map(v=>`<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.version)}</td><td><span class="st ${v.status}">${dot(v.status)}${esc(v.note||'OK')}</span></td></tr>`));
-  else if(tab==='projects')h=tbl([t('project'),t('type'),t('requires'),t('vulns'),t('issues')],(r.projects||[]).map(p=>`<tr><td class="mono">${esc(p.path)}</td><td>${esc(p.framework||'-')}</td><td class="mono">${esc([p.php_req&&'php '+p.php_req,p.node_req&&'node '+p.node_req].filter(Boolean).join(' · ')||'-')}</td><td>${p.vulns?Object.entries(p.vulns).filter(([k])=>k==='composer'||k==='npm').map(([k,v])=>`<span class="st ${v?'crit':'ok'}">${dot(v?'crit':'ok')}${k}: ${v}</span>`).join(' &nbsp; '):`<span class="muted">${t('notAudited')}</span>`}</td><td><span class="st ${p.issues?'warn':'ok'}">${dot(p.issues?'warn':'ok')}${p.issues}</span></td></tr>`))+'<div class="gap"></div>'+findings(cat(['Dependencies']));
+  else if(tab==='projects')h=(!(r.projects||[]).length?`<div class="empty">${ic('pkg')}<div>${t('noProjects')}</div><div class="row" style="justify-content:center">${(r.scan_roots||[]).map(p=>`<span class="tag mono">${esc(p)}</span>`).join('')||`<span class="muted">${t('noRoots')}</span>`}</div><div class="muted" style="max-width:560px">${t('addRootsHelp')}</div><button type="button" data-open-settings>${ic('gear','sm')}${t('configure')}</button></div>`:'')+tbl([t('project'),t('type'),t('requires'),t('vulns'),t('issues')],(r.projects||[]).map(p=>`<tr><td class="mono">${esc(p.path)}</td><td>${esc(p.framework||'-')}</td><td class="mono">${esc([p.php_req&&'php '+p.php_req,p.node_req&&'node '+p.node_req].filter(Boolean).join(' · ')||'-')}</td><td>${p.vulns?Object.entries(p.vulns).filter(([k])=>k==='composer'||k==='npm').map(([k,v])=>`<span class="st ${v?'crit':'ok'}">${dot(v?'crit':'ok')}${k}: ${v}</span>`).join(' &nbsp; '):`<span class="muted">${t('notAudited')}</span>`}</td><td><span class="st ${p.issues?'warn':'ok'}">${dot(p.issues?'warn':'ok')}${p.issues}</span></td></tr>`))+'<div class="gap"></div>'+findings(cat(['Dependencies']));
   else if(tab==='containers')h=tbl([t('container'),t('image'),t('state'),t('inside'),t('cpuRam'),t('cves'),t('ports')],(r.containers||[]).map(c=>`<tr><td><b>${esc(c.name)}</b><div class="muted">${esc(c.user)}${c.restarts?' · '+c.restarts+' '+t('restarts'):''}</div></td><td class="mono">${esc(c.image)}<div class="muted">${c.age_days?c.age_days+' '+t('daysOld'):''}</div></td><td><span class="st ${c.state==='running'?'ok':'crit'}">${dot(c.state==='running'?'ok':'crit')}${esc(c.state)}</span></td><td>${(c.versions||[]).map(v=>`<span class="st ${v.status}">${dot(v.status)}${esc(v.name+' '+v.version)}</span>`).join('<br>')||'<span class="muted">-</span>'}</td><td class="mono">${esc(c.cpu||'-')}<div class="muted">${esc(c.mem||'')}</div></td><td>${c.vulns?`<span class="st ${c.vulns.critical?'crit':c.vulns.high?'warn':'ok'}">${dot(c.vulns.critical?'crit':c.vulns.high?'warn':'ok')}${c.vulns.critical||0} / ${c.vulns.high||0}</span>`:`<span class="muted">${t('notScanned')}</span>`}</td><td class="mono">${esc((c.ports||[]).join(', ')||'-')}</td></tr>`))+'<div class="gap"></div>'+findings(cat(['Docker']));
   else if(tab==='security')h=(r.attackers&&r.attackers.length?`<h2>${ic('shield','sm')}${t('attempts')}</h2><div class="atk">${r.attackers.map(a=>`<div><span class="mono">${esc(a.ip)}</span><b>${a.count}</b></div>`).join('')}</div>`:'')+findings(cat(['Security','Permissions','Resources']));
   $('#tabBody').innerHTML=h;
@@ -489,11 +566,29 @@ $('#sf').onsubmit=async e=>{e.preventDefault();$('#se').textContent='';
   try{await api('setup',{token:$('#st').value.trim(),username:$('#su').value,password:$('#sp').value});['#st','#sp','#sr'].forEach(s=>$(s).value='');await showApp()}catch(x){$('#se').textContent=x.message||''}};
 $('#outBtn').onclick=async()=>{await api('logout',{}).catch(()=>{});showLogin()};
 $('#scanBtn').onclick=async()=>{MANUAL=true;SCANNING=true;syncOverlay();try{await api('scan',{})}catch(x){}await pollReport()};
+const CLR={tg:false,sl:false};
+function stateLine(){
+  const L=(id,set,key)=>{const el=$(id);if(!el)return;el.innerHTML=set?(CLR[key]?esc(t('willRemove')):esc(t('savedKeep'))+' <a href="#" data-clear="'+key+'" class="lnk" style="margin:0">'+t('remove')+'</a>'):''};
+  L('#nTgState',SET.tg,'tg');L('#nSlState',SET.sl,'sl');
+}
+const SET={tg:false,sl:false};
+document.addEventListener('click',e=>{const a=e.target.closest('[data-clear]');if(!a)return;e.preventDefault();CLR[a.dataset.clear]=true;stateLine()});
+function notifyPayload(){return{telegram_token:$('#nTgTok').value,telegram_clear:CLR.tg,telegram_chat_id:$('#nTgChat').value,slack_webhook:$('#nSlack').value,slack_clear:CLR.sl,min_severity:$('#nSev').value,lang:LANG,recovery:$('#nRec').checked}}
+$('#nTest').onclick=async()=>{const el=$('#nRes');el.className='hint';el.textContent='...';
+  try{const j=await api('notify/test',{notify:notifyPayload()});el.innerHTML=(j.results||[]).map(r=>r.ok?'<span class="res-ok">'+esc(r.channel)+': '+t('testOk')+'</span>':'<span class="res-err">'+esc(r.channel)+': '+esc(r.error)+'</span>').join(' &nbsp; ')}catch(x){if(x){el.className='hint res-err';el.textContent=x.message||''}}};
+async function openSettings(){$('#sErr').textContent='';try{const s=await api('settings');$('#sRoots').value=(s.scan_roots||[]).join('\n');$('#sUrls').value=(s.urls||[]).join('\n');$('#sIntel').checked=s.intel_enabled!==false;const n=s.notify||{};CLR.tg=false;CLR.sl=false;SET.tg=!!n.telegram_token_set;SET.sl=!!n.slack_webhook_set;$('#nTgTok').value='';$('#nSlack').value='';$('#nTgChat').value=n.telegram_chat_id||'';$('#nSev').value=n.min_severity||'crit';$('#nRec').checked=!!n.recovery;$('#nRes').textContent='';stateLine()}catch(x){if(x)$('#sErr').textContent=x.message||''}$('#settings').showModal()}
+$('#setBtn').onclick=openSettings;
+$('#sx').onclick=()=>$('#settings').close();
+document.addEventListener('click',e=>{if(e.target.closest('[data-open-settings]'))openSettings()});
+$('#setf').onsubmit=async e=>{e.preventDefault();$('#sErr').textContent='';
+  const lines=v=>v.split('\n').map(x=>x.trim()).filter(Boolean);
+  try{await api('settings',{scan_roots:lines($('#sRoots').value),urls:lines($('#sUrls').value),intel_enabled:$('#sIntel').checked,notify:notifyPayload()});$('#settings').close();MANUAL=true;SCANNING=true;syncOverlay();await pollReport()}catch(x){if(x)$('#sErr').textContent=x.message||''}};
 $('#acctBtn').onclick=()=>{$('#ae').textContent='';$('#acct').showModal()};
 $('#ax').onclick=()=>$('#acct').close();
 $('#af').onsubmit=async e=>{e.preventDefault();$('#ae').textContent='';
   try{await api('account',{current:$('#ac').value,username:$('#au').value,password:$('#an').value});$('#acct').close();['#ac','#au','#an'].forEach(s=>$(s).value='');alert(t('acctUpdated'));showLogin()}catch(x){$('#ae').textContent=x.message||''}};
 
+(function(){const pb=$('#procBox');try{pb.open=localStorage.getItem('dd_procs_open')==='1'}catch{}pb.addEventListener('toggle',()=>{try{localStorage.setItem('dd_procs_open',pb.open?'1':'0')}catch{}})})();
 applyLang();
 (async()=>{try{const s=await(await fetch('/api/status')).json();if(s.setup){hideAll();$('#setup').classList.remove('hidden');$('#st').focus();return}}catch{}
   api('me').then(showApp).catch(()=>showLogin())})();

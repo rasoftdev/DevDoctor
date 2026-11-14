@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="assets/logo.png" alt="DevDoctor" width="300">
+  <img src="assets/banner.webp" alt="DevDoctor: diagnostica, analiza y optimiza tus proyectos de desarrollo" width="100%">
+</p>
+
+<p align="center">
+  <img src="assets/logo.png" alt="DevDoctor" width="150">
 </p>
 
 # DevDoctor
@@ -25,6 +29,9 @@ y muestra los recursos del servidor en vivo.
 - [Comandos](#comandos)
 - [Configuración](#configuración)
 - [Qué revisa DevDoctor](#qué-revisa-devdoctor)
+- [Configuración desde el dashboard](#configuración-desde-el-dashboard)
+- [Fuentes públicas de seguridad](#fuentes-públicas-de-seguridad)
+- [Notificaciones a Telegram y Slack](#notificaciones-a-telegram-y-slack)
 - [Puntuación de salud](#puntuación-de-salud)
 - [Seguridad de la propia app](#seguridad-de-la-propia-app)
 - [Poner DevDoctor detrás de Nginx o Apache](#poner-devdoctor-detrás-de-nginx-o-apache)
@@ -55,6 +62,9 @@ y muestra los recursos del servidor en vivo.
   el dashboard muestra una capa desenfocada con el logo y el tiempo transcurrido hasta que termina
   (los escaneos automáticos no interrumpen la pantalla).
 - **Docker:** versiones dentro de los contenedores, estado, configuración peligrosa y CVEs de imágenes.
+- **Alertas de seguridad en vivo** cruzando tu software con php.net, nodejs.org, endoflife.date, CISA KEV, NVD, OSV.dev,
+  Ubuntu Security y GitHub Advisories (ver [Fuentes públicas de seguridad](#fuentes-públicas-de-seguridad)).
+- **Notificaciones** a Telegram y Slack cuando aparece un problema nuevo.
 - **Modo terminal:** `devdoctor scan` produce el mismo diagnóstico sin levantar el servidor.
 - **Servicio systemd endurecido** que se reinicia solo si falla.
 
@@ -164,6 +174,8 @@ devdoctor run      Inicia el dashboard (lo que ejecuta systemd)
 devdoctor url      Muestra la URL de acceso
 devdoctor setup-code  Muestra el código para crear la cuenta en la web
 devdoctor passwd   Restablece usuario/contraseña desde la terminal (olvido o bloqueo)
+devdoctor notify   Envía un mensaje de prueba a Telegram/Slack (notify test)
+devdoctor paths    Lista/añade/quita carpetas extra donde buscar proyectos
 devdoctor scan     Ejecuta un diagnóstico en la terminal (--json para salida JSON)
 devdoctor version  Muestra la versión
 ```
@@ -206,6 +218,10 @@ Archivo: `/etc/devdoctor/config.json` (permisos `0600`, solo root).
 | `listen` | Interfaz de escucha. Vacío = todas; `127.0.0.1` = solo local (para usar con Nginx/Apache) |
 | `username`, `pass_*` | Credenciales (la contraseña nunca se guarda en claro) |
 | `scan_roots` | Directorios **adicionales** donde buscar proyectos. Siempre se revisan `/var/www`, `/srv`, `/home` y `/opt` |
+| `urls` | Sitios web a vigilar (también editable desde el dashboard) |
+| `intel_disabled` | `true` desactiva las consultas a fuentes públicas de seguridad |
+| `nvd_api_key` | Clave gratuita de NVD (opcional): acelera las consultas |
+| `notify` | Notificaciones: `telegram_token`, `telegram_chat_id`, `slack_webhook`, `min_severity` (`crit`/`warn`), `lang`, `recovery` |
 | `scan_interval_min` | Minutos entre diagnósticos automáticos (15 por defecto) |
 
 Tras editar a mano: `sudo systemctl restart devdoctor`.
@@ -274,6 +290,107 @@ SSH (`PermitRootLogin`, contraseñas vacías o por contraseña), firewall activo
 de **seguridad pendientes** (apt y dnf), reinicio requerido, usuarios con UID 0 extra, cuentas sin
 contraseña, sincronización NTP, OOM kills de la última semana y **IPs con intentos fallidos de SSH**
 en las últimas 24 horas.
+
+## Configuración desde el dashboard
+
+El botón **Configuración** del dashboard (icono de engranaje) permite añadir, sin tocar archivos ni reiniciar nada:
+
+- **Carpetas extra donde buscar proyectos** (una por línea). Se suman a las que DevDoctor ya revisa solo.
+- **Sitios web a vigilar** (una URL por línea). En cada escaneo comprueba que respondan, su tiempo de
+  respuesta, el certificado SSL (válido y fecha de expiración), la redirección de HTTP a HTTPS y las
+  cabeceras de seguridad (`Strict-Transport-Security`, `Content-Security-Policy`, `X-Frame-Options`…),
+  y avisa si el servidor revela versiones de software. Aparecen en la pestaña **Sitios web**.
+
+Al pulsar **Guardar y escanear** se guarda en `config.json` y se lanza un diagnóstico inmediato.
+Las URL deben ser `http://` o `https://` (sin usuario/contraseña) y no se permiten direcciones
+`169.254.x.x` (metadatos de nube). Máximo 30 carpetas y 30 URLs.
+
+### ¿Dónde busca proyectos?
+
+Un **proyecto** es una carpeta con `composer.json`, `package.json` o `wp-config.php`, o un sitio
+con `index.php`/`index.html` dentro de una carpeta web. DevDoctor busca, hasta 4 niveles de profundidad, en:
+
+1. `/var/www`, `/srv`, `/home` y `/opt`.
+2. Los **docroots reales** que encuentra en tu configuración de Nginx/Apache/Caddy (`root`, `DocumentRoot`),
+   estén donde estén, y la carpeta padre de cada uno (la raíz del proyecto).
+3. Las carpetas del anfitrión que **montan tus contenedores Docker** (bind mounts).
+4. Las carpetas extra que añadas desde el dashboard o con el CLI:
+
+```bash
+sudo devdoctor paths list
+sudo devdoctor paths add /data/sitios
+sudo devdoctor paths remove /data/sitios
+```
+
+Se ignoran `vendor`, `node_modules`, carpetas ocultas, `snap`, `.cache`… y se analizan como máximo 60
+proyectos. Si la pestaña **Proyectos** sale vacía, muestra exactamente en qué carpetas buscó.
+
+## Fuentes públicas de seguridad
+
+DevDoctor consulta APIs públicas y gratuitas (sin clave) y las cruza con **lo que tienes instalado**, para
+avisarte de problemas conocidos en cuanto se publican, como un fallo grave de PHP. Los resultados salen en la
+pestaña **Alertas** (con enlace al aviso oficial y el comando para corregirlo) y también como hallazgos.
+
+| Fuente | Qué aporta |
+|---|---|
+| **php.net** | Versiones nuevas de tu rama de PHP y cuáles son de seguridad |
+| **nodejs.org** | Lo mismo para Node.js (marca `security` de cada release) |
+| **endoflife.date** | Fin de soporte del sistema operativo y del software (Nginx, Apache, MySQL, MariaDB, PostgreSQL, Redis, Python, OpenSSL); además mantiene al día las fechas de PHP y Node |
+| **CISA KEV** | Vulnerabilidades que ya se están explotando, añadidas en los últimos 120 días, para el software que usas |
+| **GitHub Security Advisories (php-src)** | Avisos de seguridad recientes del propio proyecto PHP que afectan a tu versión |
+| **OSV.dev** | Vulnerabilidades de dependencias (Composer y npm) cuando `composer audit`/`npm audit` no están disponibles. Agrega los avisos de GitHub y Packagist |
+| **NVD (NIST)** | CVE de gravedad alta/crítica que coinciden con la versión exacta de software que **no** viene de tu distribución (compilado a mano, PPA, NodeSource…) |
+| **Ubuntu Security** | CVE de los paquetes de tu Ubuntu que **aún no tienen parche**, teniendo en cuenta los backports |
+
+Cómo se evitan los falsos positivos: las distribuciones (Ubuntu, Debian) aplican los parches de seguridad sin
+cambiar el número de versión, así que para los paquetes oficiales de la distro un aviso de «versión vieja» se
+degrada a informativo y se usa el rastreador de la propia distribución. Los paquetes de repositorios de terceros
+(PPA de PHP, NodeSource…) sí se comparan con la versión oficial. El catálogo CISA KEV no indica versiones afectadas,
+por eso su aviso pide **verificar** que tu versión esté corregida.
+
+- Las respuestas se **cachean en disco** (`/etc/devdoctor/cache`, de 6 h a 7 días según la fuente). Si una fuente
+  no responde se usan los datos guardados y la pestaña Alertas muestra su estado (punto rojo/verde).
+- El primer escaneo con consultas puede tardar un par de minutos, porque NVD limita a 5 peticiones cada 30 s
+  (con una clave gratuita de NVD en `nvd_api_key` baja a unos segundos). Después todo sale de la caché.
+- **Privacidad:** solo se envían nombres y versiones de software (por ejemplo `php 8.3.35`) y, para OSV, nombres de
+  paquetes y versiones de tus `composer.lock`/`package-lock.json`. Nunca IPs, usuarios, rutas ni contenido.
+- Se pueden desactivar desde **Configuración → Fuentes de seguridad**, o con `"intel_disabled": true` en `config.json`.
+- Limitación: el rastreador de seguridad de Debian no está integrado (en Debian se usan las actualizaciones
+  de seguridad pendientes de `apt`).
+
+## Notificaciones a Telegram y Slack
+
+Desde **Configuración → Notificaciones** puedes recibir un mensaje cuando DevDoctor detecte un problema **nuevo**:
+servicio caído, certificado a punto de caducar, sitio web caído, puerto peligroso expuesto, alertas de las fuentes
+públicas de seguridad, etc.
+
+**Telegram**
+1. Habla con [@BotFather](https://t.me/BotFather), envía `/newbot` y copia el **token** (`123456789:AAE...`).
+2. Escribe un mensaje a tu bot (o añádelo a un grupo/canal) y obtén tu **ID de chat** con
+   [@userinfobot](https://t.me/userinfobot) (para canales, usa `@nombrecanal`).
+
+**Slack**
+1. Crea un *Incoming Webhook* en <https://api.slack.com/messaging/webhooks> y copia la URL
+   (`https://hooks.slack.com/services/...`).
+
+Pega los datos, pulsa **Enviar mensaje de prueba** (usa los valores del formulario sin guardarlos) y luego
+**Guardar y escanear**. También puedes probarlo desde la terminal: `sudo devdoctor notify test`.
+
+Cómo funcionan los avisos:
+- **Solo problemas nuevos.** Cada problema se avisa una vez; si sigue ahí en el siguiente escaneo no se repite.
+  Los valores que cambian solos (días restantes, % de disco, milisegundos) no cuentan como un problema distinto.
+- **Primer escaneo:** se envía un resumen con lo más importante en ese momento, sin inundarte con todo lo existente.
+- **Umbral:** solo críticos (por defecto) o críticos y avisos.
+- **Resueltos** (opcional): cuando un problema desaparece durante dos escaneos seguidos, se avisa de que se resolvió.
+- Se envía en el idioma que tenías elegido en el dashboard al guardar, con el comando sugerido para corregir y el
+  enlace al aviso oficial.
+- Si el envío falla (sin internet, token incorrecto), el problema no se marca como avisado y se reintenta en el
+  siguiente escaneo. El estado se guarda en `/etc/devdoctor/notified.json`.
+
+Seguridad: el token y el webhook se guardan en `config.json` (permisos `0600`, solo root), **nunca se muestran de
+nuevo en el dashboard** (solo «hay un valor guardado») y se ocultan de los mensajes de error. El webhook de Slack
+debe ser de `hooks.slack.com` y Telegram solo se contacta en `api.telegram.org`, así que el servidor no puede
+usarse para enviar peticiones a direcciones internas.
 
 ## Puntuación de salud
 
@@ -483,8 +600,12 @@ DevDoctor/
 │   │   ├── check_perms.go    permisos
 │   │   ├── check_projects.go proyectos, composer y npm
 │   │   ├── check_docker.go   contenedores
+│   │   ├── check_urls.go     sitios web vigilados (estado, SSL, cabeceras)
+│   │   ├── check_intel.go    cruce de tu software con las fuentes de seguridad
 │   │   ├── check_security.go seguridad y recursos
 │   │   └── semver.go         evaluador de constraints (^, ~, >=, ||)
+│   ├── intel/              clientes de las fuentes públicas de seguridad (con caché en disco)
+│   ├── notify/             avisos a Telegram y Slack
 │   ├── server/             HTTPS, API JSON, sesiones, límite de intentos
 │   ├── web/                dashboard (HTML/CSS/JS en un solo archivo, embebido)
 │   └── version/            versión

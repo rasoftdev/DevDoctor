@@ -6,11 +6,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"devdoctor/internal/config"
 	"devdoctor/internal/sh"
 )
 
@@ -22,23 +24,135 @@ type packageJSON struct {
 	Engines map[string]string `json:"engines"`
 }
 
-func discoverProjects(roots []string) []string {
+// docroots lee la configuración de Nginx/Apache para encontrar dónde viven realmente los sitios.
+var (
+	nginxRootRe  = regexp.MustCompile(`(?m)^s*roots+"?([^;"s]+)"?s*;`)
+	apacheRootRe = regexp.MustCompile(`(?mi)^s*DocumentRoots+"?([^"s]+)"?`)
+)
+
+func webDocroots() map[string]bool {
+	out := map[string]bool{}
+	for _, root := range []string{"/etc/nginx", "/etc/apache2", "/etc/httpd", "/etc/caddy"} {
+		filepath.WalkDir(root, func(p string, de fs.DirEntry, err error) error {
+			if err != nil || de.IsDir() {
+				return nil
+			}
+			if fi, e := de.Info(); e != nil || fi.Size() > 1<<20 {
+				return nil
+			}
+			txt := sh.ReadFile(p)
+			for _, re := range []*regexp.Regexp{nginxRootRe, apacheRootRe} {
+				for _, m := range re.FindAllStringSubmatch(txt, -1) {
+					if d := filepath.Clean(m[1]); strings.HasPrefix(d, "/") && strings.Count(d, "/") >= 2 {
+						out[d] = true
+					}
+				}
+			}
+			return nil
+		})
+	}
+	return out
+}
+
+// dockerBindSources devuelve las carpetas del anfitrión que montan los contenedores (donde suele estar el código).
+func dockerBindSources() []string {
+	if !sh.Have("docker") {
+		return nil
+	}
+	ids, _ := sh.Run(8*time.Second, "docker", "ps", "-q")
+	list := strings.Fields(ids)
+	if len(list) == 0 {
+		return nil
+	}
+	raw, err := sh.RunStdout(15*time.Second, "", "docker", append([]string{"inspect", "--format", "{{range .Mounts}}{{if eq .Type \"bind\"}}{{.Source}}\n{{end}}{{end}}"}, list...)...)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, l := range strings.Split(raw, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.Count(l, "/") < 2 {
+			continue
+		}
+		skip := false
+		for _, bad := range []string{"/var/run", "/run", "/etc", "/proc", "/sys", "/dev", "/var/lib/docker", "/var/log", "/tmp", "/usr", "/lib", "/boot"} {
+			if l == bad || strings.HasPrefix(l, bad+"/") {
+				skip = true
+			}
+		}
+		if !skip {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// projectRoots reúne todos los directorios donde buscar proyectos (sólo los que existen).
+func projectRoots(cfg config.Config, docroots map[string]bool) []string {
+	seen := map[string]bool{}
+	var roots []string
+	add := func(p string) {
+		p = filepath.Clean(p)
+		if !seen[p] && sh.Exists(p) {
+			seen[p] = true
+			roots = append(roots, p)
+		}
+	}
+	for _, r := range scanRoots(cfg) {
+		add(r)
+	}
+	for d := range docroots {
+		add(d)
+		if parent := filepath.Dir(d); strings.Count(parent, "/") >= 2 { // raíz del proyecto (p. ej. .../app/public -> .../app)
+			add(parent)
+		}
+	}
+	for _, d := range dockerBindSources() {
+		add(d)
+	}
+	sort.Strings(roots)
+	return roots
+}
+
+func isWebPath(p string, docroots map[string]bool) bool {
+	if docroots[p] {
+		return true
+	}
+	for _, pre := range []string{"/var/www/", "/srv/", "/usr/share/nginx/"} {
+		if strings.HasPrefix(p+"/", pre) {
+			return true
+		}
+	}
+	return false
+}
+
+func discoverProjects(roots []string, docroots map[string]bool) []string {
+	seen := map[string]bool{}
 	var found []string
 	for _, root := range roots {
 		base := strings.Count(root, "/")
 		filepath.WalkDir(root, func(p string, de fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-			if !de.IsDir() {
+			if err != nil || !de.IsDir() {
 				return nil
 			}
 			if strings.Count(p, "/")-base > 4 || skipDirs[de.Name()] || (strings.HasPrefix(de.Name(), ".") && p != root) {
 				return filepath.SkipDir
 			}
-			if sh.Exists(filepath.Join(p, "composer.json")) || sh.Exists(filepath.Join(p, "package.json")) || sh.Exists(filepath.Join(p, "wp-config.php")) {
-				found = append(found, p)
-				if len(found) >= 40 {
+			isProj := sh.Exists(filepath.Join(p, "composer.json")) || sh.Exists(filepath.Join(p, "package.json")) || sh.Exists(filepath.Join(p, "wp-config.php"))
+			if !isProj && isWebPath(p, docroots) {
+				for _, idx := range []string{"index.php", "index.html", "index.htm"} {
+					if sh.Exists(filepath.Join(p, idx)) {
+						isProj = true
+						break
+					}
+				}
+			}
+			if isProj {
+				if !seen[p] {
+					seen[p] = true
+					found = append(found, p)
+				}
+				if len(found) >= 60 {
 					return filepath.SkipAll
 				}
 				return filepath.SkipDir
@@ -51,7 +165,12 @@ func discoverProjects(roots []string) []string {
 }
 
 func checkProjects(c *Collector, s *Scanner) {
-	projects := discoverProjects(scanRoots(c.cfg))
+	docroots := webDocroots()
+	roots := projectRoots(c.cfg, docroots)
+	c.mu.Lock()
+	c.R.ScanRoots = roots
+	c.mu.Unlock()
+	projects := discoverProjects(roots, docroots)
 	if len(projects) == 0 {
 		return
 	}
@@ -108,6 +227,8 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 		pi.Framework = "Next.js"
 	case sh.Exists(filepath.Join(p, "nuxt.config.ts")) || sh.Exists(filepath.Join(p, "nuxt.config.js")):
 		pi.Framework = "Nuxt"
+	case !sh.Exists(filepath.Join(p, "composer.json")) && !sh.Exists(filepath.Join(p, "package.json")):
+		pi.Framework = "Site"
 	}
 
 	// ---------- PHP / Composer ----------

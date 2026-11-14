@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"devdoctor/internal/config"
+	"devdoctor/internal/notify"
 	"devdoctor/internal/scanner"
 	"devdoctor/internal/sysinfo"
 	"devdoctor/internal/version"
@@ -66,6 +67,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/report", s.guard(s.report))
 	mux.HandleFunc("POST /api/scan", s.guard(s.startScan))
 	mux.HandleFunc("POST /api/account", s.guard(s.account))
+	mux.HandleFunc("GET /api/settings", s.guard(s.getSettings))
+	mux.HandleFunc("POST /api/settings", s.guard(s.setSettings))
+	mux.HandleFunc("POST /api/notify/test", s.guard(s.testNotify))
 	return s.secure(mux)
 }
 
@@ -169,7 +173,7 @@ func tooMany(w http.ResponseWriter) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(v) != nil {
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(v) != nil {
 		writeJSON(w, 400, map[string]string{"error": "invalid request"})
 		return false
 	}
@@ -373,6 +377,7 @@ func Serve(cs *config.Store, dir string) error {
 	sam := &sysinfo.Sampler{}
 	sam.Start()
 	sc := scanner.New(cs, sam)
+	sc.OnDone = notify.NewManager(cs).Handle
 	sc.Start()
 	go func() {
 		for {
@@ -403,4 +408,138 @@ func Serve(cs *config.Store, dir string) error {
 	}
 	log.Printf("DevDoctor %s listening on https://%s:%d", version.Version, cfg.Host, cfg.Port)
 	return hs.ListenAndServeTLS("", "")
+}
+
+// notifyView es lo que ve el dashboard: nunca se devuelven los secretos, sólo si están guardados.
+type notifyView struct {
+	TelegramChatID   string `json:"telegram_chat_id"`
+	TelegramTokenSet bool   `json:"telegram_token_set"`
+	SlackWebhookSet  bool   `json:"slack_webhook_set"`
+	MinSeverity      string `json:"min_severity"`
+	Lang             string `json:"lang"`
+	Recovery         bool   `json:"recovery"`
+}
+
+// notifyIn es lo que envía el dashboard. Un secreto vacío significa "conservar el guardado".
+type notifyIn struct {
+	TelegramToken  string `json:"telegram_token"`
+	TelegramClear  bool   `json:"telegram_clear"`
+	TelegramChatID string `json:"telegram_chat_id"`
+	SlackWebhook   string `json:"slack_webhook"`
+	SlackClear     bool   `json:"slack_clear"`
+	MinSeverity    string `json:"min_severity"`
+	Lang           string `json:"lang"`
+	Recovery       bool   `json:"recovery"`
+}
+
+func mergeNotify(old config.NotifyConfig, in *notifyIn) (config.NotifyConfig, error) {
+	n := old
+	if in == nil {
+		return n, nil
+	}
+	if in.TelegramClear {
+		n.TelegramToken, n.TelegramChatID = "", ""
+	}
+	if t := strings.TrimSpace(in.TelegramToken); t != "" {
+		n.TelegramToken = t
+	}
+	if !in.TelegramClear {
+		n.TelegramChatID = strings.TrimSpace(in.TelegramChatID)
+	}
+	if in.SlackClear {
+		n.SlackWebhook = ""
+	}
+	if w := strings.TrimSpace(in.SlackWebhook); w != "" {
+		n.SlackWebhook = w
+	}
+	n.MinSeverity, n.Lang, n.Recovery = in.MinSeverity, in.Lang, in.Recovery
+	if n.MinSeverity == "" {
+		n.MinSeverity = "crit"
+	}
+	return n, n.Validate()
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+// getSettings devuelve las carpetas, URLs, notificaciones y consultas online configuradas.
+func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cs.Get()
+	n := cfg.Notify
+	sev := n.MinSeverity
+	if sev == "" {
+		sev = "crit"
+	}
+	writeJSON(w, 200, map[string]any{
+		"scan_roots":    nonNil(cfg.ScanRoots),
+		"urls":          nonNil(cfg.URLs),
+		"intel_enabled": !cfg.IntelDisabled,
+		"notify": notifyView{TelegramChatID: n.TelegramChatID, TelegramTokenSet: n.TelegramToken != "", SlackWebhookSet: n.SlackWebhook != "",
+			MinSeverity: sev, Lang: n.Lang, Recovery: n.Recovery},
+	})
+}
+
+// setSettings guarda la configuración y lanza un escaneo inmediato.
+func (s *Server) setSettings(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		ScanRoots    []string  `json:"scan_roots"`
+		URLs         []string  `json:"urls"`
+		IntelEnabled *bool     `json:"intel_enabled"`
+		Notify       *notifyIn `json:"notify"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	roots, err := config.NormalizeRoots(in.ScanRoots)
+	if err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	urls, err := config.NormalizeURLs(in.URLs)
+	if err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	cur := s.cs.Get()
+	notif, err := mergeNotify(cur.Notify, in.Notify)
+	if err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := s.cs.Update(func(c *config.Config) {
+		c.ScanRoots, c.URLs, c.Notify = roots, urls, notif
+		if in.IntelEnabled != nil {
+			c.IntelDisabled = !*in.IntelEnabled
+		}
+	}); err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	log.Printf("settings updated from %s (%d folders, %d URLs, notifications: %v)", clientIP(r), len(roots), len(urls), notif.Enabled())
+	s.scan.Start()
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+// testNotify envía un mensaje de prueba con los valores del formulario (sin guardarlos).
+func (s *Server) testNotify(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Notify *notifyIn `json:"notify"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	n, err := mergeNotify(s.cs.Get().Notify, in.Notify)
+	if err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	if !n.Enabled() {
+		writeJSON(w, 400, map[string]string{"error": "no notification channel is configured"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"results": notify.Test(n)})
 }

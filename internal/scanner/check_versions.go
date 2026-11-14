@@ -7,12 +7,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 func d(y int, m time.Month, day int) time.Time { return time.Date(y, m, day, 0, 0, 0, 0, time.UTC) }
 
-// Fin de soporte de seguridad.
+// Fin de soporte de seguridad (se refrescan desde endoflife.date cuando hay conexión).
+var eolMu sync.RWMutex
+
 var phpEOL = map[string]time.Time{
 	"7.4": d(2022, 11, 28), "8.0": d(2023, 11, 26), "8.1": d(2025, 12, 31),
 	"8.2": d(2026, 12, 31), "8.3": d(2027, 12, 31), "8.4": d(2028, 12, 31), "8.5": d(2029, 12, 31),
@@ -41,6 +44,8 @@ var tools = []tool{
 	{"Docker", []string{"docker", "--version"}, `(\d+\.\d+\.\d+)`},
 	{"Git", []string{"git", "--version"}, `(\d+\.\d+\.\d+)`},
 	{"OpenSSL", []string{"openssl", "version"}, `OpenSSL (\d+\.\d+\.\d+)`},
+	{"OpenSSH", []string{"ssh", "-V"}, `OpenSSH_(\d+\.\d+(?:p\d+)?)`},
+	{"sudo", []string{"sudo", "-V"}, `Sudo version (\d+\.\d+\.\d+(?:p\d+)?)`},
 }
 
 func detectVersion(cmd []string, re string) string {
@@ -91,6 +96,13 @@ func checkVersions(c *Collector) {
 		if v == "" {
 			continue
 		}
+		name := t.name
+		if name == "MySQL/MariaDB" {
+			name = "MySQL"
+			if out, _ := sh.Run(8*time.Second, t.cmd[0], t.cmd[1:]...); strings.Contains(out, "MariaDB") {
+				name = "MariaDB"
+			}
+		}
 		st, note := "ok", Msg{}
 		if t.name == "Node.js" {
 			st, note = nodeStatus(v)
@@ -98,14 +110,28 @@ func checkVersions(c *Collector) {
 				c.add("Versions", st, M("Node.js %s: %s", v, note), "", "Install a current LTS release (nvm install --lts or NodeSource).")
 			}
 		}
-		add(mkVer(t.name, v, st, note))
+		add(mkVer(name, v, st, note))
+	}
+}
+
+// setEOLTables sustituye las tablas de fin de soporte por datos frescos de endoflife.date.
+func setEOLTables(php map[string]time.Time, node map[int]time.Time) {
+	eolMu.Lock()
+	defer eolMu.Unlock()
+	for k, v := range php {
+		phpEOL[k] = v
+	}
+	for k, v := range node {
+		nodeEOL[k] = v
 	}
 }
 
 func phpStatus(v string) (string, Msg) {
 	pv, _ := parseVer(v)
 	key := fmt.Sprintf("%d.%d", pv[0], pv[1])
+	eolMu.RLock()
 	eol, ok := phpEOL[key]
+	eolMu.RUnlock()
 	if !ok {
 		if pv[0] < 8 || (pv[0] == 8 && pv[1] < 1) {
 			return "crit", M("unsupported version (EOL)")
@@ -128,7 +154,9 @@ func nodeStatus(v string) (string, Msg) {
 	if maj%2 == 1 {
 		return "warn", M("odd-numbered release (not LTS), not recommended in production")
 	}
+	eolMu.RLock()
 	eol, ok := nodeEOL[maj]
+	eolMu.RUnlock()
 	if !ok {
 		if maj < 16 {
 			return "crit", M("unsupported version (EOL)")

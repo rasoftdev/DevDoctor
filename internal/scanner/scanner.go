@@ -14,6 +14,7 @@ type Finding struct {
 	Title    string `json:"title"`
 	Detail   string `json:"detail,omitempty"`
 	Fix      string `json:"fix,omitempty"`
+	Link     string `json:"link,omitempty"` // referencia externa (aviso oficial)
 
 	t, d, f Msg // originales traducibles
 }
@@ -81,6 +82,9 @@ type Report struct {
 	Versions   []VersionInfo   `json:"versions"`
 	Projects   []ProjectInfo   `json:"projects"`
 	Attackers  []Attacker      `json:"attackers"`
+	ScanRoots  []string        `json:"scan_roots"`
+	URLs       []URLCheck      `json:"urls"`
+	Intel      *IntelInfo      `json:"intel"`
 	Containers []ContainerInfo `json:"containers"`
 }
 
@@ -93,9 +97,14 @@ type Collector struct {
 
 // add registra un hallazgo. title/detail/fix pueden ser Msg o string (literal traducible).
 func (c *Collector) add(cat, sev string, title, detail, fix any) {
+	c.addL(cat, sev, title, detail, fix, "")
+}
+
+// addL es add con un enlace a la referencia oficial.
+func (c *Collector) addL(cat, sev string, title, detail, fix any, link string) {
 	t, d, f := msgOf(title), msgOf(detail), msgOf(fix)
 	c.mu.Lock()
-	c.R.Findings = append(c.R.Findings, Finding{Category: cat, Severity: sev, Title: t.Render("en"), Detail: d.Render("en"), Fix: f.Render("en"), t: t, d: d, f: f})
+	c.R.Findings = append(c.R.Findings, Finding{Category: cat, Severity: sev, Title: t.Render("en"), Detail: d.Render("en"), Fix: f.Render("en"), t: t, d: d, f: f, Link: link})
 	c.mu.Unlock()
 }
 
@@ -108,7 +117,9 @@ type Scanner struct {
 	mu      sync.RWMutex
 	last    *Report
 	running bool
+	rerun   bool // se pidió otro escaneo mientras había uno en curso
 	cfg     *config.Store
+	OnDone  func(*Report) // se llama al terminar cada escaneo (p. ej. para enviar notificaciones)
 	sam     *sysinfo.Sampler
 	audits  sync.Map // caché de auditorías por proyecto
 }
@@ -119,10 +130,12 @@ func (s *Scanner) Last() (*Report, bool) {
 	return s.last, s.running
 }
 
-// Start lanza un escaneo asíncrono; devuelve false si ya hay uno en curso.
+// Start lanza un escaneo asíncrono. Si ya hay uno en curso devuelve false y encola otro al terminar,
+// para que los cambios de configuración (carpetas, URLs) no se pierdan.
 func (s *Scanner) Start() bool {
 	s.mu.Lock()
 	if s.running {
+		s.rerun = true
 		s.mu.Unlock()
 		return false
 	}
@@ -132,7 +145,15 @@ func (s *Scanner) Start() bool {
 		r := s.RunSync()
 		s.mu.Lock()
 		s.last, s.running = r, false
+		again := s.rerun
+		s.rerun = false
 		s.mu.Unlock()
+		if s.OnDone != nil {
+			go func() { defer func() { recover() }(); s.OnDone(r) }()
+		}
+		if again {
+			s.Start()
+		}
 	}()
 	return true
 }
@@ -140,6 +161,7 @@ func (s *Scanner) Start() bool {
 var sevRank = map[string]int{"crit": 0, "warn": 1, "info": 2, "ok": 3}
 
 func (s *Scanner) RunSync() *Report {
+	s.cfg.Refresh() // recoge cambios hechos con "devdoctor paths" sin reiniciar
 	c := &Collector{cfg: s.cfg.Get(), sam: s.sam}
 	c.R.Started = time.Now()
 	checks := []func(){
@@ -150,6 +172,7 @@ func (s *Scanner) RunSync() *Report {
 		func() { checkProjects(c, s) },
 		func() { checkSecurity(c) },
 		func() { checkResources(c) },
+		func() { checkURLs(c) },
 		func() { checkDocker(c, s) },
 	}
 	var wg sync.WaitGroup
@@ -162,6 +185,11 @@ func (s *Scanner) RunSync() *Report {
 		}(f)
 	}
 	wg.Wait()
+	if !c.cfg.IntelDisabled {
+		checkIntel(c, s) // necesita los resultados de los demás chequeos (versiones, proyectos)
+	} else {
+		c.R.Intel = &IntelInfo{Enabled: false}
+	}
 
 	r := &c.R
 	sort.SliceStable(r.Findings, func(i, j int) bool {

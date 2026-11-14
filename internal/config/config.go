@@ -17,16 +17,20 @@ import (
 const pbkdf2Iter = 600000
 
 type Config struct {
-	Port            int      `json:"port"`
-	Host            string   `json:"host"`
-	Listen          string   `json:"listen,omitempty"` // interfaz de escucha; vacío = todas, "127.0.0.1" = solo local (con proxy)
-	Username        string   `json:"username"`
-	SetupToken      string   `json:"setup_token,omitempty"` // código de un solo uso para crear la cuenta en la web
-	PassSalt        string   `json:"pass_salt"`
-	PassHash        string   `json:"pass_hash"`
-	Iter            int      `json:"iter"`
-	ScanRoots       []string `json:"scan_roots"`
-	ScanIntervalMin int      `json:"scan_interval_min"`
+	Port            int          `json:"port"`
+	Host            string       `json:"host"`
+	Listen          string       `json:"listen,omitempty"` // interfaz de escucha; vacío = todas, "127.0.0.1" = solo local (con proxy)
+	Username        string       `json:"username"`
+	SetupToken      string       `json:"setup_token,omitempty"` // código de un solo uso para crear la cuenta en la web
+	PassSalt        string       `json:"pass_salt"`
+	PassHash        string       `json:"pass_hash"`
+	Iter            int          `json:"iter"`
+	ScanRoots       []string     `json:"scan_roots"`
+	URLs            []string     `json:"urls,omitempty"`           // sitios web a vigilar
+	IntelDisabled   bool         `json:"intel_disabled,omitempty"` // true = no consultar fuentes públicas de seguridad
+	Notify          NotifyConfig `json:"notify"`
+	NVDAPIKey       string       `json:"nvd_api_key,omitempty"` // opcional: sube el límite de peticiones a NVD
+	ScanIntervalMin int          `json:"scan_interval_min"`
 }
 
 type Store struct {
@@ -141,3 +145,21 @@ func (s *Store) Path() string { return s.path }
 
 // Configured indica si ya existe una cuenta de acceso.
 func (c *Config) Configured() bool { return c.PassHash != "" && c.Username != "" }
+
+// Refresh recarga la configuración desde disco (p. ej. tras editarla con el CLI) sin reiniciar el servicio.
+func (s *Store) Refresh() {
+	b, err := os.ReadFile(s.path)
+	if err != nil {
+		return
+	}
+	var c Config
+	if json.Unmarshal(b, &c) != nil {
+		return
+	}
+	if c.ScanIntervalMin <= 0 {
+		c.ScanIntervalMin = 15
+	}
+	s.mu.Lock()
+	s.cfg = c
+	s.mu.Unlock()
+}

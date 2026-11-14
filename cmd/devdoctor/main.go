@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"devdoctor/internal/config"
+	"devdoctor/internal/notify"
 	"devdoctor/internal/scanner"
 	"devdoctor/internal/server"
 	"devdoctor/internal/sysinfo"
@@ -47,6 +48,10 @@ func main() {
 		cmdSetupCode(args)
 	case "scan":
 		cmdScan(args)
+	case "paths":
+		cmdPaths(args)
+	case "notify":
+		cmdNotify(args)
 	case "update":
 		cmdUpdate(args)
 	case "uninstall":
@@ -65,6 +70,8 @@ Usage: devdoctor <command> [options]
   setup-code  Print the one-time code used to create the account in the web UI
   passwd      Reset the username/password from the terminal (forgot it or locked out; --user, --password)
   scan        Run a diagnosis in the terminal (--json for JSON output)
+  notify      Send a test notification to the configured Telegram/Slack channels (notify test)
+  paths       List/add/remove extra folders where projects are searched (paths add /srv/apps)
   update      Update to the latest version (--check to only look, --ref, --force)
   uninstall   Remove DevDoctor from this server (--yes, --keep-config)
   version     Print the version`)
@@ -405,4 +412,108 @@ func cmdUninstall(args []string) {
 		step("removed "+exe, os.Remove(exe))
 	}
 	fmt.Println("DevDoctor has been uninstalled.")
+}
+
+// cmdPaths manages the extra folders where DevDoctor looks for projects (scan_roots in the config).
+func cmdPaths(args []string) {
+	fs := flag.NewFlagSet("paths", flag.ExitOnError)
+	path := configFlag(fs)
+	// allow: devdoctor paths add /srv/apps --config x   (subcommand first)
+	sub, rest := "list", args
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		sub, rest = args[0], args[1:]
+	}
+	fs.Parse(rest)
+	cs, err := config.Load(*path)
+	if err != nil {
+		if os.IsPermission(err) {
+			fail(errors.New("permission denied reading " + *path + ": run with sudo"))
+		}
+		fail(err)
+	}
+	switch sub {
+	case "list":
+		c := cs.Get()
+		fmt.Println("Always searched: /var/www, /srv, /home, /opt, the Nginx/Apache document roots and the folders mounted by running Docker containers.")
+		if len(c.ScanRoots) == 0 {
+			fmt.Println("Extra folders: (none)  ->  add one with: sudo devdoctor paths add /path/to/projects")
+			return
+		}
+		fmt.Println("Extra folders:")
+		for _, p := range c.ScanRoots {
+			fmt.Println("  ", p)
+		}
+	case "add", "remove", "rm":
+		if fs.NArg() == 0 {
+			fail(errors.New("usage: devdoctor paths " + sub + " /absolute/path"))
+		}
+		p := filepath.Clean(fs.Arg(0))
+		if !filepath.IsAbs(p) {
+			fail(errors.New("the path must be absolute: " + p))
+		}
+		if sub == "add" {
+			if st, err := os.Stat(p); err != nil || !st.IsDir() {
+				fail(errors.New("not a directory: " + p))
+			}
+		}
+		err = cs.Update(func(c *config.Config) {
+			var out []string
+			for _, x := range c.ScanRoots {
+				if x != p {
+					out = append(out, x)
+				}
+			}
+			if sub == "add" {
+				out = append(out, p)
+			}
+			c.ScanRoots = out
+		})
+		if err != nil {
+			fail(err)
+		}
+		if sub == "add" {
+			fmt.Println("Added:", p, "(applies on the next scan; use \"Scan now\" in the dashboard)")
+		} else {
+			fmt.Println("Removed:", p)
+		}
+	default:
+		fail(errors.New("unknown subcommand " + sub + " (use list, add or remove)"))
+	}
+}
+
+// cmdNotify sends a test message to the notification channels configured in the dashboard.
+func cmdNotify(args []string) {
+	fs := flag.NewFlagSet("notify", flag.ExitOnError)
+	path := configFlag(fs)
+	sub, rest := "test", args
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		sub, rest = args[0], args[1:]
+	}
+	fs.Parse(rest)
+	if sub != "test" {
+		fail(errors.New("unknown subcommand " + sub + " (use: devdoctor notify test)"))
+	}
+	cs, err := config.Load(*path)
+	if err != nil {
+		if os.IsPermission(err) {
+			fail(errors.New("permission denied reading " + *path + ": run with sudo"))
+		}
+		fail(err)
+	}
+	n := cs.Get().Notify
+	if !n.Enabled() {
+		fail(errors.New("no notification channel is configured: add Telegram or Slack in the dashboard (Settings)"))
+	}
+	bad := false
+	for _, r := range notify.Test(n) {
+		if r.OK {
+			fmt.Printf("  [OK]    %s: message sent\n", r.Channel)
+		} else {
+			bad = true
+			fmt.Printf("  [ERROR] %s: %s\n", r.Channel, r.Error)
+		}
+	}
+	if bad {
+		os.Exit(1)
+	}
 }
