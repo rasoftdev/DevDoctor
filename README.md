@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="assets/banner.webp" alt="DevDoctor: diagnostica, analiza y optimiza tus proyectos de desarrollo" width="100%">
-</p>
-
-<p align="center">
   <img src="assets/logo.png" alt="DevDoctor" width="150">
 </p>
 
