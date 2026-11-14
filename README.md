@@ -6,6 +6,8 @@
   <img src="assets/logo.png" alt="DevDoctor" width="150">
 </p>
 
+<p align="center"><a href="README.en.md">English</a> · <b>Español</b></p>
+
 # DevDoctor
 
 **Diagnóstico y dashboard web para servidores Linux, en un único binario.**
@@ -698,7 +700,7 @@ también si nunca creaste la cuenta desde la web.
 
 ## Autor y contacto
 
-Creado por **Ricardo Alvarez**.
+Creado por **Ricardo Alvarez** ([RASOFTDEV](https://github.com/rasoftdev)).
 
 - Correo: [dev@ricardoalvarez.co](mailto:dev@ricardoalvarez.co)
 - Sitio web: [me.ricardoalvarez.co](https://me.ricardoalvarez.co)
