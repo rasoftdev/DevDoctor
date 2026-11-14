@@ -33,14 +33,6 @@ type Tasks struct {
 	Running   int `json:"running"`
 }
 
-// PSI son las métricas de presión del kernel (avg10, % de tiempo en espera). Sólo si el kernel las expone.
-type PSI struct {
-	Available bool    `json:"available"`
-	CPU       float64 `json:"cpu"`
-	Mem       float64 `json:"mem"`
-	IO        float64 `json:"io"`
-}
-
 type extraState struct {
 	prevDisk  [4]uint64 // lecturas, sectores leídos, escrituras, sectores escritos
 	prevDiskT time.Time
@@ -54,9 +46,7 @@ type extra struct {
 	NetErrs                       uint64
 	Conns                         Conns
 	Tasks                         Tasks
-	FDUsed, FDMax                 uint64
 	TempC                         float64
-	PSI                           PSI
 	slow                          bool // true cuando se han refrescado las métricas costosas
 }
 
@@ -151,11 +141,6 @@ func (s *Sampler) sampleExtra(i int) extra {
 		}
 	}
 
-	// --- descriptores de archivo ---
-	if f := strings.Fields(sh.ReadFile("/proc/sys/fs/file-nr")); len(f) >= 3 {
-		e.FDUsed, e.FDMax = u64(f[0]), u64(f[2])
-	}
-
 	// --- temperatura (la zona más caliente) ---
 	if zs, _ := filepath.Glob("/sys/class/thermal/thermal_zone*/temp"); zs != nil {
 		for _, z := range zs {
@@ -167,24 +152,5 @@ func (s *Sampler) sampleExtra(i int) extra {
 		}
 	}
 
-	// --- presión del sistema (PSI) ---
-	psi := func(name string) (float64, bool) {
-		for _, l := range strings.Split(sh.ReadFile("/proc/pressure/"+name), "\n") {
-			if strings.HasPrefix(l, "some ") {
-				for _, kv := range strings.Fields(l) {
-					if strings.HasPrefix(kv, "avg10=") {
-						v, _ := strconv.ParseFloat(strings.TrimPrefix(kv, "avg10="), 64)
-						return v, true
-					}
-				}
-			}
-		}
-		return 0, false
-	}
-	var ok bool
-	e.PSI.CPU, ok = psi("cpu")
-	e.PSI.Mem, _ = psi("memory")
-	e.PSI.IO, _ = psi("io")
-	e.PSI.Available = ok
 	return e
 }

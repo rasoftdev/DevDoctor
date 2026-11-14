@@ -58,10 +58,7 @@ type Snapshot struct {
 	NetErrs   uint64     `json:"net_errs"`
 	Conns     Conns      `json:"conns"`
 	Tasks     Tasks      `json:"tasks"`
-	FDUsed    uint64     `json:"fd_used"`
-	FDMax     uint64     `json:"fd_max"`
 	TempC     float64    `json:"temp_c"`
-	PSI       PSI        `json:"psi"`
 	Rx        float64    `json:"rx"`
 	Tx        float64    `json:"tx"`
 	Disks     []Disk     `json:"disks"`
@@ -173,7 +170,7 @@ func (s *Sampler) tick(i int) {
 	sn.DiskRead, sn.DiskWrite, sn.DiskIOPS = ex.DiskRead, ex.DiskWrite, ex.DiskIOPS
 	sn.RxPkts, sn.TxPkts, sn.NetErrs = ex.RxPkts, ex.TxPkts, ex.NetErrs
 	if ex.slow {
-		sn.Conns, sn.Tasks, sn.FDUsed, sn.FDMax, sn.TempC, sn.PSI = ex.Conns, ex.Tasks, ex.FDUsed, ex.FDMax, ex.TempC, ex.PSI
+		sn.Conns, sn.Tasks, sn.TempC = ex.Conns, ex.Tasks, ex.TempC
 	}
 	if disks != nil {
 		sn.Disks = disks
@@ -337,12 +334,29 @@ func readProcs() ([]Proc, int) {
 	return ps, z
 }
 
+// virtualIface reconoce interfaces de contenedores/virtualización que no sirven para llegar al servidor.
+func virtualIface(name string) bool {
+	for _, p := range []string{"docker", "br-", "veth", "virbr", "cni", "flannel", "kube", "lxc", "lxd", "cali", "vxlan", "weave", "podman", "cilium", "vmnet", "vboxnet"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// localIPs devuelve las IPv4 útiles del servidor (sin loopback, link-local ni puentes de contenedores).
 func localIPs() []string {
 	var ips []string
-	addrs, _ := net.InterfaceAddrs()
-	for _, a := range addrs {
-		if n, ok := a.(*net.IPNet); ok && !n.IP.IsLoopback() && n.IP.To4() != nil {
-			ips = append(ips, n.IP.String())
+	ifs, _ := net.Interfaces()
+	for _, ifc := range ifs {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 || virtualIface(ifc.Name) {
+			continue
+		}
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if n, ok := a.(*net.IPNet); ok && n.IP.To4() != nil && !n.IP.IsLoopback() && !n.IP.IsLinkLocalUnicast() {
+				ips = append(ips, n.IP.String())
+			}
 		}
 	}
 	return ips

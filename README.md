@@ -49,8 +49,8 @@ y muestra los recursos del servidor en vivo.
   (botón **Cuenta**) o con `devdoctor passwd`.
 - **Recursos en vivo** (refresco cada 2 s): CPU con desglose (usuario, sistema, espera de E/S, steal), RAM
   (caché y disponible) y swap, red (bytes, paquetes y errores), **E/S de disco** (MB/s e IOPS), carga,
-  **conexiones TCP**, procesos e hilos, **descriptores de archivo**, temperatura (si el hardware la
-  expone), **presión del sistema (PSI)**, discos con inodos, procesos con más consumo, uptime e IPs.
+  **conexiones TCP**, procesos e hilos, temperatura (si el hardware la
+  expone), discos con inodos, procesos con más consumo, uptime e IPs.
 - **Diagnóstico completo** programado cada 15 minutos o bajo demanda, con puntuación de salud de 0 a 100. Al pulsar **Escanear ahora**
   el dashboard muestra una capa desenfocada con el logo y el tiempo transcurrido hasta que termina
   (los escaneos automáticos no interrumpen la pantalla).
@@ -218,9 +218,8 @@ y renovado automáticamente al reiniciar cuando le quedan menos de 30).
 ### Recursos (en vivo)
 CPU (total y desglose usuario/sistema/iowait/steal), memoria (usada, caché, disponible), swap, red
 (↓/↑, paquetes/s y errores), E/S de disco (lectura, escritura e IOPS), carga 1/5/15 y por núcleo,
-conexiones TCP (establecidas, time-wait, en escucha), procesos e hilos, descriptores de archivo,
-temperatura, presión del kernel (PSI de CPU, memoria y E/S), discos con uso de inodos, procesos más
-pesados, procesos zombie y uptime. Los discos de `snap` y similares se ocultan para no meter ruido.
+conexiones TCP (establecidas, time-wait, en escucha), procesos e hilos, temperatura, discos con uso de
+inodos, procesos más pesados, procesos zombie y uptime. Los discos de `snap` y similares se ocultan para no meter ruido.
 
 ### Versiones
 PHP (incluidas versiones múltiples como `php8.1` y `php8.3`), Node.js, npm, Composer, Python, Nginx,

@@ -50,7 +50,10 @@ header{display:flex;gap:10px;align-items:center;padding:12px 24px;border-bottom:
 header .sp{flex:1}
 main{padding:22px 24px 48px;max-width:1320px;margin:0 auto;display:grid;gap:16px}
 .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));align-items:start}
+.grid.kpis{grid-template-columns:repeat(var(--cols,4),minmax(0,1fr))}
+@media(max-width:1100px){.grid.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.grid.kpis{grid-template-columns:1fr}}
+.stack{display:grid;gap:14px}
 .muted{color:var(--mut)}
 
 /* health card */
@@ -84,18 +87,18 @@ main{padding:22px 24px 48px;max-width:1320px;margin:0 auto;display:grid;gap:16px
 .kpi .s{color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:12px;color:var(--mut)}
 .stats b{color:var(--text);font-variant-numeric:tabular-nums;font-weight:700}
-.meters1{display:grid;gap:10px;margin:8px 0 4px}
 .kpi .s{white-space:normal}
 .spark{width:100%;height:44px;margin-top:6px;display:block}
 
 /* disks */
-.disks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
-.disk{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;justify-items:center;gap:8px;text-align:center}
-.disk svg{width:76px;height:76px}.disk text{fill:var(--text);font-weight:800;font-size:19px}
-.disk .m{font-weight:700;word-break:break-all}.disk .u{font-size:12px;color:var(--mut)}
+.disks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(270px,100%),1fr));gap:12px}
+.disk{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:16px;min-width:0}
+.disk svg{width:72px;height:72px;flex:none}.disk text{fill:var(--text);font-weight:800;font-size:19px}
+.disk .dt{min-width:0;display:grid;gap:3px}
+.disk .m{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.disk .u{font-size:12px;color:var(--mut)}
 
 /* processes */
-.procs{display:grid;gap:8px}
+.procs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr));gap:10px}
 .proc{display:grid;grid-template-columns:38px 1fr;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
 .av{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-weight:800;color:#fff;font-size:15px}
 .proc .nm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
@@ -249,9 +252,9 @@ dialog form{display:grid;gap:18px}
       </div>
     </section>
 
-    <section class="grid" id="kpis"></section>
+    <section class="grid kpis" id="kpis"></section>
 
-    <section class="two">
+    <section class="stack">
       <div class="card"><h2><svg class="i sm"><use href="#i-disk"/></svg><span data-i18n="disks"></span></h2><div class="disks" id="disks"></div></div>
       <div class="card"><h2><svg class="i sm"><use href="#i-cpu"/></svg><span data-i18n="topProcs"></span></h2><div class="procs" id="procs"></div></div>
     </section>
@@ -298,8 +301,7 @@ en:{setupTitle:'Initial setup',setupHelp:'Create your username and password. The
  disks:'Disks',topProcs:'Top processes by CPU',newUser:'New username (optional)',newPassOpt:'New password (optional, min. 10)',currentPass:'Current password',cancel:'Cancel',save:'Save',
  passMismatch:'The passwords do not match',acctUpdated:'Account updated. Please sign in again.',showPass:'Show password',hidePass:'Hide password',copy:'Copy',copied:'Copied',
  cpu:'CPU',memory:'Memory',network:'Network',load:'Load (1/5/15)',uptime:'Uptime',cores:'cores',of:'of',noSwap:'no swap',swap:'Swap',zombies:'zombies',inodes:'Inodes at',
- free:'free',used:'used',user:'user',sys:'system',iowait:'I/O wait',steal:'steal',cached:'cache',avail:'available',diskIO:'Disk I/O',errors:'errors',perCore:'per core',booted:'booted',conns:'TCP connections',established:'established',listening:'listening',procsT:'Processes',threads:'threads',running:'running',fds:'File descriptors',temp:'Temperature',hottest:'hottest sensor',pressure:'Pressure (PSI)',unlimited:'no limit set',psiHelp:'% of time tasks waited in the last 10 s',
- tFindings:'Findings',tPorts:'Ports',tServices:'Services',tSsl:'SSL',tVersions:'Versions',tProjects:'Projects',tContainers:'Containers',tSecurity:'Security',
+ free:'free',used:'used',user:'user',sys:'system',iowait:'I/O wait',steal:'steal',cached:'cache',avail:'available',diskIO:'Disk I/O',errors:'errors',perCore:'per core',booted:'booted',conns:'TCP connections',established:'established',listening:'listening',procsT:'Processes',threads:'threads',running:'running',temp:'Temperature',hottest:'hottest sensor',tFindings:'Findings',tPorts:'Ports',tServices:'Services',tSsl:'SSL',tVersions:'Versions',tProjects:'Projects',tContainers:'Containers',tSecurity:'Security',
  all:'All',crit:'Critical',warn:'Warning',info:'Info',noFindings:'No findings here. Everything looks good.',nothing:'Nothing to show.',
  port:'Port',proto:'Proto',listen:'Listening on',process:'Process',state:'State',publicP:'Public',localP:'Local only',
  service:'Service',status:'Status',boot:'On boot',domains:'Domains',issuer:'Issuer',expires:'Expires',days:'Days',path:'Path',selfSigned:'self-signed',
@@ -314,7 +316,7 @@ es:{setupTitle:'Configuración inicial',setupHelp:'Crea tu usuario y contraseña
  disks:'Discos',topProcs:'Procesos con más CPU',newUser:'Nuevo usuario (opcional)',newPassOpt:'Nueva contraseña (opcional, mín. 10)',currentPass:'Contraseña actual',cancel:'Cancelar',save:'Guardar',
  passMismatch:'Las contraseñas no coinciden',acctUpdated:'Cuenta actualizada. Inicia sesión de nuevo.',showPass:'Mostrar contraseña',hidePass:'Ocultar contraseña',copy:'Copiar',copied:'Copiado',
  cpu:'CPU',memory:'Memoria',network:'Red',load:'Carga (1/5/15)',uptime:'Uptime',cores:'núcleos',of:'de',noSwap:'sin swap',swap:'Swap',zombies:'zombies',inodes:'Inodos al',
- free:'libres',used:'usado',user:'usuario',sys:'sistema',iowait:'espera E/S',steal:'steal',cached:'caché',avail:'disponible',diskIO:'E/S de disco',errors:'errores',perCore:'por núcleo',booted:'arranque',conns:'Conexiones TCP',established:'establecidas',listening:'escuchando',procsT:'Procesos',threads:'hilos',running:'en ejecución',fds:'Descriptores de archivo',temp:'Temperatura',hottest:'sensor más caliente',pressure:'Presión (PSI)',unlimited:'sin límite',psiHelp:'% del tiempo que las tareas esperaron en los últimos 10 s',
+ free:'libres',used:'usado',user:'usuario',sys:'sistema',iowait:'espera E/S',steal:'steal',cached:'caché',avail:'disponible',diskIO:'E/S de disco',errors:'errores',perCore:'por núcleo',booted:'arranque',conns:'Conexiones TCP',established:'establecidas',listening:'escuchando',procsT:'Procesos',threads:'hilos',running:'en ejecución',temp:'Temperatura',hottest:'sensor más caliente',
  tFindings:'Hallazgos',tPorts:'Puertos',tServices:'Servicios',tSsl:'SSL',tVersions:'Versiones',tProjects:'Proyectos',tContainers:'Contenedores',tSecurity:'Seguridad',
  all:'Todos',crit:'Crítico',warn:'Aviso',info:'Info',noFindings:'Sin hallazgos aquí. Todo en orden.',nothing:'Nada que mostrar.',
  port:'Puerto',proto:'Proto',listen:'Escucha en',process:'Proceso',state:'Estado',publicP:'Pública',localP:'Solo local',
@@ -402,14 +404,12 @@ function renderMetrics(m){
     `<span class="tag">${ic('term','sm')}${esc(m.os)}</span>`,
     `<span class="tag mono">${ic('tag','sm')}kernel ${esc(m.kernel)}</span>`,
     `<span class="tag">${ic('cpu','sm')}${m.cores} ${t('cores')}</span>`,
-    ...(m.ips||[]).map(ip=>`<span class="tag mono">${ic('globe','sm')}${esc(ip)}</span>`)].join('');
+    ...(m.ips||[]).slice(0,3).map(ip=>`<span class="tag mono">${ic('globe','sm')}${esc(ip)}</span>`),...((m.ips||[]).length>3?[`<span class="tag" title="${esc((m.ips||[]).slice(3).join(', '))}">+${m.ips.length-3}</span>`]:[])].join('');
   const st=(arr)=>'<div class="stats">'+arr.filter(Boolean).map(x=>'<span>'+x+'</span>').join('')+'</div>';
   const kv=(l,v,c)=>l+' <b'+(c?' style="color:'+c+'"':'')+'>'+v+'</b>';
-  const cb=m.cpu_break||{},ps=m.psi||{},tk=m.tasks||{},cn=m.conns||{};
+  const cb=m.cpu_break||{},tk=m.tasks||{},cn=m.conns||{};
   const dsum=(H.disk_r||[]).map((v,i)=>v+((H.disk_w||[])[i]||0));
-  const fdP=m.fd_max?m.fd_used/m.fd_max*100:0;
   const card=(ico,title,v,sub,extra,sp)=>'<div class="card kpi"><div class="hd">'+ic(ico,'sm')+title+'</div><div class="v">'+v+'</div><div class="s">'+sub+'</div>'+(extra||'')+(sp||'')+'</div>';
-  const meter=(l,p,c)=>'<div class="meter"><div class="t"><span>'+l+'</span><b>'+p.toFixed(1)+'%</b></div><div class="bar"><i style="width:'+Math.min(p*2,100)+'%;background:'+c+'"></i></div></div>';
   const cards=[
    card('cpu',t('cpu'),'<span style="color:'+col(m.cpu)+'">'+m.cpu.toFixed(1)+'%</span>',esc(m.cpu_model||'')+' · '+m.cores+' '+t('cores'),
      st([kv(t('user'),(cb.user||0).toFixed(1)+'%'),kv(t('sys'),(cb.system||0).toFixed(1)+'%'),kv(t('iowait'),(cb.iowait||0).toFixed(1)+'%',(cb.iowait||0)>10?'var(--warn)':''),kv(t('steal'),(cb.steal||0).toFixed(1)+'%',(cb.steal||0)>5?'var(--crit)':'')]),spark(H.cpu,col(m.cpu),100)),
@@ -423,14 +423,12 @@ function renderMetrics(m){
      st([kv(t('zombies'),m.zombies,m.zombies>5?'var(--warn)':'')])),
    card('clock',t('uptime'),dur(m.uptime_sec),t('booted')+' '+new Date(Date.now()-m.uptime_sec*1000).toLocaleString(LANG)),
    card('globe',t('conns'),cn.established??0,t('established'),st([kv('time-wait',cn.time_wait??0),kv(t('listening'),cn.listen??0)])),
-   card('layers',t('procsT'),tk.processes??0,(tk.threads??0)+' '+t('threads'),st([kv(t('running'),tk.running??0)])),
-   card('key',t('fds'),(m.fd_used||0).toLocaleString(LANG),m.fd_max>1e12?t('unlimited'):t('of')+' '+(m.fd_max||0).toLocaleString(LANG)+' ('+fdP.toFixed(2)+'%)',
-     m.fd_max>1e12?'':'<div class="bar" style="margin-top:8px"><i style="width:'+Math.min(fdP*4,100)+'%;background:'+col(fdP*4)+'"></i></div>')
+   card('layers',t('procsT'),tk.processes??0,(tk.threads??0)+' '+t('threads'),st([kv(t('running'),tk.running??0)]))
   ];
   if(m.temp_c>0)cards.push(card('gauge',t('temp'),'<span style="color:'+(m.temp_c>=85?'var(--crit)':m.temp_c>=70?'var(--warn)':'var(--ok)')+'">'+m.temp_c.toFixed(0)+' °C</span>',t('hottest')));
-  if(ps.available)cards.push('<div class="card kpi"><div class="hd">'+ic('shield','sm')+t('pressure')+'</div><div class="meters1">'+meter('CPU',ps.cpu,col(ps.cpu*3))+meter('MEM',ps.mem,col(ps.mem*3))+meter('I/O',ps.io,col(ps.io*3))+'</div><div class="s">'+t('psiHelp')+'</div></div>');
+  const n=cards.length;$('#kpis').style.setProperty('--cols',n===9?3:n%4===0?4:n%3===0?3:4); // filas completas
   $('#kpis').innerHTML=cards.join('');
-  $('#disks').innerHTML=(m.disks||[]).map(d=>`<div class="disk">${donut(d.pct)}<div class="m mono">${esc(d.mount)}</div><div class="u">${bytes(d.used)} / ${bytes(d.total)}<br>${esc(d.type)}${d.inode_pct>=70?` · <span class="warn">${t('inodes')} ${d.inode_pct}%</span>`:''}</div></div>`).join('')||`<span class="muted">${t('nothing')}</span>`;
+  $('#disks').innerHTML=(m.disks||[]).map(d=>`<div class="disk">${donut(d.pct)}<div class="dt"><div class="m mono" title="${esc(d.mount)}">${esc(d.mount)}</div><div class="u">${bytes(d.used)} / ${bytes(d.total)} · ${esc(d.type)}</div><div class="u">${bytes(d.total-d.used)} ${t('free')}${d.inode_pct>=70?` · <span class="warn">${t('inodes')} ${d.inode_pct}%</span>`:''}</div></div></div>`).join('')||`<span class="muted">${t('nothing')}</span>`;
   $('#procs').innerHTML=(m.procs||[]).map(p=>`<div class="proc"><div class="av" style="background:${procColor(p.cmd)}">${esc((p.cmd[0]||'?').toUpperCase())}</div><div style="min-width:0"><div class="nm"><b>${esc(p.cmd)}</b><span class="mini mono">PID ${p.pid}</span><span class="mini">${esc(p.user)}</span></div>
     <div class="meters"><div class="meter"><div class="t"><span>CPU</span><b>${p.cpu}%</b></div><div class="bar"><i style="width:${Math.min(p.cpu,100)}%;background:${col(p.cpu)}"></i></div></div>
     <div class="meter"><div class="t"><span>MEM</span><b>${p.mem}%</b></div><div class="bar"><i style="width:${Math.min(p.mem*3,100)}%;background:var(--info)"></i></div></div></div></div></div>`).join('');
