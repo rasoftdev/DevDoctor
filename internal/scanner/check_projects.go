@@ -1,6 +1,7 @@
-package main
+package scanner
 
 import (
+	"devdoctor/internal/sh"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -34,7 +35,7 @@ func discoverProjects(roots []string) []string {
 			if strings.Count(p, "/")-base > 4 || skipDirs[de.Name()] || (strings.HasPrefix(de.Name(), ".") && p != root) {
 				return filepath.SkipDir
 			}
-			if exists(filepath.Join(p, "composer.json")) || exists(filepath.Join(p, "package.json")) || exists(filepath.Join(p, "wp-config.php")) {
+			if sh.Exists(filepath.Join(p, "composer.json")) || sh.Exists(filepath.Join(p, "package.json")) || sh.Exists(filepath.Join(p, "wp-config.php")) {
 				found = append(found, p)
 				if len(found) >= 40 {
 					return filepath.SkipAll
@@ -66,7 +67,7 @@ func checkProjects(c *Collector, s *Scanner) {
 	}
 	phpMods := map[string]bool{}
 	if phpOK {
-		out, _ := run(8*time.Second, "php", "-m")
+		out, _ := sh.Run(8*time.Second, "php", "-m")
 		for _, l := range strings.Split(out, "\n") {
 			phpMods[strings.ToLower(strings.TrimSpace(l))] = true
 		}
@@ -96,16 +97,16 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 		c.add("Dependencias", sev, title+" — "+p, detail, fix)
 	}
 	switch {
-	case exists(filepath.Join(p, "artisan")):
+	case sh.Exists(filepath.Join(p, "artisan")):
 		pi.Framework = "Laravel"
 		laravelWritable(c, p)
-	case exists(filepath.Join(p, "wp-config.php")):
+	case sh.Exists(filepath.Join(p, "wp-config.php")):
 		pi.Framework = "WordPress"
-	case exists(filepath.Join(p, "symfony.lock")):
+	case sh.Exists(filepath.Join(p, "symfony.lock")):
 		pi.Framework = "Symfony"
-	case exists(filepath.Join(p, "next.config.js")) || exists(filepath.Join(p, "next.config.mjs")):
+	case sh.Exists(filepath.Join(p, "next.config.js")) || sh.Exists(filepath.Join(p, "next.config.mjs")):
 		pi.Framework = "Next.js"
-	case exists(filepath.Join(p, "nuxt.config.ts")) || exists(filepath.Join(p, "nuxt.config.js")):
+	case sh.Exists(filepath.Join(p, "nuxt.config.ts")) || sh.Exists(filepath.Join(p, "nuxt.config.js")):
 		pi.Framework = "Nuxt"
 	}
 
@@ -143,9 +144,9 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 			if ji, _ := os.Stat(filepath.Join(p, "composer.json")); ji != nil && ji.ModTime().After(li.ModTime().Add(time.Minute)) {
 				issue("warn", "composer.json es más nuevo que composer.lock", "El lock puede estar desactualizado.", "composer update --lock")
 			}
-			if !exists(filepath.Join(p, "vendor", "autoload.php")) {
+			if !sh.Exists(filepath.Join(p, "vendor", "autoload.php")) {
 				issue("crit", "Dependencias PHP sin instalar (vendor/ ausente)", "", "composer install --no-dev --optimize-autoloader")
-			} else if have("composer") {
+			} else if sh.Have("composer") {
 				if n, titles, ok := s.auditComposer(p, li); ok {
 					pi.Vulns["composer"] = n
 					if n > 0 {
@@ -169,14 +170,14 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 		}
 		lock := filepath.Join(p, "package-lock.json")
 		li, lerr := os.Stat(lock)
-		hasLock := lerr == nil || exists(filepath.Join(p, "yarn.lock")) || exists(filepath.Join(p, "pnpm-lock.yaml"))
+		hasLock := lerr == nil || sh.Exists(filepath.Join(p, "yarn.lock")) || sh.Exists(filepath.Join(p, "pnpm-lock.yaml"))
 		if !hasLock {
 			issue("info", "Sin lockfile de Node", "", "npm install  (y versiona package-lock.json)")
 		}
-		if hasLock && !exists(filepath.Join(p, "node_modules")) && !exists(filepath.Join(p, ".next")) && !exists(filepath.Join(p, "dist")) && !exists(filepath.Join(p, "build")) {
+		if hasLock && !sh.Exists(filepath.Join(p, "node_modules")) && !sh.Exists(filepath.Join(p, ".next")) && !sh.Exists(filepath.Join(p, "dist")) && !sh.Exists(filepath.Join(p, "build")) {
 			issue("warn", "node_modules ausente (dependencias sin instalar)", "", "npm ci")
 		}
-		if lerr == nil && have("npm") {
+		if lerr == nil && sh.Have("npm") {
 			if v, ok := s.auditNPM(p, li); ok {
 				for k, n := range v {
 					pi.Vulns["npm_"+k] = n
@@ -211,7 +212,7 @@ func (s *Scanner) auditComposer(p string, li os.FileInfo) (int, []string, bool) 
 		r := v.(composerAuditRes)
 		return r.n, r.titles, r.ok
 	}
-	out, _ := runStdout(40*time.Second, p, "composer", "audit", "--locked", "--format=json", "--no-interaction")
+	out, _ := sh.RunStdout(40*time.Second, p, "composer", "audit", "--locked", "--format=json", "--no-interaction")
 	var parsed struct {
 		Advisories json.RawMessage `json:"advisories"`
 	}
@@ -243,7 +244,7 @@ func (s *Scanner) auditNPM(p string, li os.FileInfo) (map[string]int, bool) {
 		m, _ := v.(map[string]int)
 		return m, m != nil
 	}
-	out, _ := runStdout(45*time.Second, p, "npm", "audit", "--json", "--package-lock-only", "--no-fund", "--no-update-notifier")
+	out, _ := sh.RunStdout(45*time.Second, p, "npm", "audit", "--json", "--package-lock-only", "--no-fund", "--no-update-notifier")
 	var parsed struct {
 		Metadata struct {
 			Vulnerabilities map[string]int `json:"vulnerabilities"`

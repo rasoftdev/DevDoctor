@@ -1,6 +1,7 @@
-package main
+package sysinfo
 
 import (
+	"devdoctor/internal/sh"
 	"net"
 	"os"
 	"strconv"
@@ -101,13 +102,13 @@ func (s *Sampler) static() {
 	sn := &s.snap
 	sn.Host, _ = os.Hostname()
 	sn.OS = "Linux"
-	for _, l := range strings.Split(readFile("/etc/os-release"), "\n") {
+	for _, l := range strings.Split(sh.ReadFile("/etc/os-release"), "\n") {
 		if strings.HasPrefix(l, "PRETTY_NAME=") {
 			sn.OS = strings.Trim(strings.TrimPrefix(l, "PRETTY_NAME="), `"`)
 		}
 	}
-	sn.Kernel = strings.TrimSpace(readFile("/proc/sys/kernel/osrelease"))
-	for _, l := range strings.Split(readFile("/proc/cpuinfo"), "\n") {
+	sn.Kernel = strings.TrimSpace(sh.ReadFile("/proc/sys/kernel/osrelease"))
+	for _, l := range strings.Split(sh.ReadFile("/proc/cpuinfo"), "\n") {
 		if strings.HasPrefix(l, "processor") {
 			sn.Cores++
 		} else if strings.HasPrefix(l, "model name") && sn.CPUModel == "" {
@@ -123,13 +124,13 @@ func (s *Sampler) tick(i int) {
 	mt, mu, st, su := readMem()
 	rx, tx := s.readNet()
 	var load [3]float64
-	if f := strings.Fields(readFile("/proc/loadavg")); len(f) >= 3 {
+	if f := strings.Fields(sh.ReadFile("/proc/loadavg")); len(f) >= 3 {
 		for k := 0; k < 3; k++ {
 			load[k], _ = strconv.ParseFloat(f[k], 64)
 		}
 	}
 	var up float64
-	if f := strings.Fields(readFile("/proc/uptime")); len(f) > 0 {
+	if f := strings.Fields(sh.ReadFile("/proc/uptime")); len(f) > 0 {
 		up, _ = strconv.ParseFloat(f[0], 64)
 	}
 	var disks []Disk
@@ -162,7 +163,7 @@ func (s *Sampler) tick(i int) {
 }
 
 func (s *Sampler) readCPU() float64 {
-	l := strings.SplitN(readFile("/proc/stat"), "\n", 2)[0]
+	l := strings.SplitN(sh.ReadFile("/proc/stat"), "\n", 2)[0]
 	f := strings.Fields(l)
 	if len(f) < 8 || f[0] != "cpu" {
 		return 0
@@ -186,7 +187,7 @@ func (s *Sampler) readCPU() float64 {
 
 func readMem() (total, used, swapT, swapU uint64) {
 	m := map[string]uint64{}
-	for _, l := range strings.Split(readFile("/proc/meminfo"), "\n") {
+	for _, l := range strings.Split(sh.ReadFile("/proc/meminfo"), "\n") {
 		f := strings.Fields(l)
 		if len(f) >= 2 {
 			v, _ := strconv.ParseUint(f[1], 10, 64)
@@ -210,7 +211,7 @@ func readMem() (total, used, swapT, swapU uint64) {
 
 func (s *Sampler) readNet() (rx, tx float64) {
 	var r, t uint64
-	for _, l := range strings.Split(readFile("/proc/net/dev"), "\n") {
+	for _, l := range strings.Split(sh.ReadFile("/proc/net/dev"), "\n") {
 		i := strings.Index(l, ":")
 		if i < 0 {
 			continue
@@ -238,12 +239,12 @@ func (s *Sampler) readNet() (rx, tx float64) {
 }
 
 func readDisks() []Disk {
-	out, err := run(8*time.Second, "df", "-PT", "-B1", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "overlay", "-x", "efivarfs")
+	out, err := sh.Run(8*time.Second, "df", "-PT", "-B1", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "overlay", "-x", "efivarfs")
 	if err != nil && out == "" {
 		return nil
 	}
 	inodes := map[string]float64{}
-	if io, _ := run(8*time.Second, "df", "-Pi", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "overlay"); io != "" {
+	if io, _ := sh.Run(8*time.Second, "df", "-Pi", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "overlay"); io != "" {
 		lines := strings.Split(io, "\n")
 		for _, l := range lines[1:] {
 			f := strings.Fields(l)
@@ -272,7 +273,7 @@ func readDisks() []Disk {
 }
 
 func readProcs() ([]Proc, int) {
-	out, err := run(5*time.Second, "ps", "-eo", "pid=,user=,stat=,pcpu=,pmem=,comm=", "--sort=-pcpu")
+	out, err := sh.Run(5*time.Second, "ps", "-eo", "pid=,user=,stat=,pcpu=,pmem=,comm=", "--sort=-pcpu")
 	if err != nil && out == "" {
 		return nil, 0
 	}
@@ -307,8 +308,8 @@ func localIPs() []string {
 	return ips
 }
 
-// primaryIP devuelve la IP de salida por defecto (no envía tráfico).
-func primaryIP() string {
+// PrimaryIP devuelve la IP de salida por defecto (no envía tráfico).
+func PrimaryIP() string {
 	if c, err := net.Dial("udp", "192.0.2.1:9"); err == nil {
 		defer c.Close()
 		if a, ok := c.LocalAddr().(*net.UDPAddr); ok {

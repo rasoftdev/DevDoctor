@@ -1,6 +1,7 @@
-package main
+package scanner
 
 import (
+	"devdoctor/internal/sh"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -43,10 +44,10 @@ var tools = []tool{
 }
 
 func detectVersion(cmd []string, re string) string {
-	if !have(cmd[0]) {
+	if !sh.Have(cmd[0]) {
 		return ""
 	}
-	out, _ := run(8*time.Second, cmd[0], cmd[1:]...)
+	out, _ := sh.Run(8*time.Second, cmd[0], cmd[1:]...)
 	if m := regexp.MustCompile(re).FindStringSubmatch(out); m != nil {
 		return m[1]
 	}

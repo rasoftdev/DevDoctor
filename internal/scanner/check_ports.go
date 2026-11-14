@@ -1,6 +1,7 @@
-package main
+package scanner
 
 import (
+	"devdoctor/internal/sh"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -29,7 +30,7 @@ func checkPortsServices(c *Collector) {
 }
 
 func scanPorts(c *Collector) []PortInfo {
-	out, err := run(10*time.Second, "ss", "-H", "-tulnp")
+	out, err := sh.Run(10*time.Second, "ss", "-H", "-tulnp")
 	if err != nil && out == "" {
 		c.add("Puertos", "info", "No se pudo ejecutar 'ss'", "Instala iproute2 para analizar puertos.", "")
 		return nil
@@ -88,11 +89,11 @@ func scanPorts(c *Collector) []PortInfo {
 var svcCandidates = regexp.MustCompile(`^(nginx|apache2|httpd|mysql|mysqld|mariadb|postgresql|redis-server|redis|docker|ssh|sshd|fail2ban|cron|crond|supervisor|supervisord|memcached|mongod|elasticsearch|rabbitmq-server|php[0-9.]*-fpm|ufw|firewalld|chrony|chronyd|systemd-timesyncd|caddy|traefik|haproxy|varnish|cloudflared|certbot\.timer)\.(service|timer)$`)
 
 func checkServices(c *Collector, ports []PortInfo) {
-	if !have("systemctl") {
+	if !sh.Have("systemctl") {
 		c.add("Servicios", "info", "systemd no disponible", "No se pueden revisar servicios con systemctl.", "")
 		return
 	}
-	out, _ := run(10*time.Second, "systemctl", "list-unit-files", "--no-legend", "--no-pager", "--type=service,timer")
+	out, _ := sh.Run(10*time.Second, "systemctl", "list-unit-files", "--no-legend", "--no-pager", "--type=service,timer")
 	known := map[string]bool{}
 	var svcs []ServiceInfo
 	for _, l := range strings.Split(out, "\n") {
@@ -108,7 +109,7 @@ func checkServices(c *Collector, ports []PortInfo) {
 			continue
 		}
 		known[name] = true
-		act, _ := run(5*time.Second, "systemctl", "is-active", f[0])
+		act, _ := sh.Run(5*time.Second, "systemctl", "is-active", f[0])
 		svcs = append(svcs, ServiceInfo{Name: name, Active: strings.TrimSpace(act), Enabled: f[1]})
 	}
 
@@ -126,8 +127,8 @@ func checkServices(c *Collector, ports []PortInfo) {
 			continue
 		}
 		detail := ""
-		if jl, _ := run(6*time.Second, "journalctl", "-u", s.Name, "-n", "6", "--no-pager", "-o", "cat"); jl != "" {
-			detail = trunc(jl, 500)
+		if jl, _ := sh.Run(6*time.Second, "journalctl", "-u", s.Name, "-n", "6", "--no-pager", "-o", "cat"); jl != "" {
+			detail = sh.Trunc(jl, 500)
 		}
 		// Conflicto de puertos típico entre servidores web.
 		if s.Name == "nginx" || s.Name == "apache2" || s.Name == "httpd" {
@@ -147,7 +148,7 @@ func checkServices(c *Collector, ports []PortInfo) {
 	}
 
 	// Otros servicios fallidos del sistema.
-	if fl, _ := run(8*time.Second, "systemctl", "--failed", "--no-legend", "--no-pager", "--plain"); fl != "" {
+	if fl, _ := sh.Run(8*time.Second, "systemctl", "--failed", "--no-legend", "--no-pager", "--plain"); fl != "" {
 		for _, l := range strings.Split(fl, "\n") {
 			f := strings.Fields(l)
 			if len(f) == 0 || !strings.Contains(f[0], ".") {

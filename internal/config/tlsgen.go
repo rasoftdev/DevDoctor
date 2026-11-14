@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"crypto/ecdsa"
@@ -15,8 +15,8 @@ import (
 	"time"
 )
 
-// ensureCert crea (o renueva) un certificado autofirmado junto al config.
-func ensureCert(dir, host string) (tls.Certificate, error) {
+// EnsureCert crea (o renueva) un certificado autofirmado junto al config.
+func EnsureCert(dir, host string) (tls.Certificate, error) {
 	crt, key := filepath.Join(dir, "tls.crt"), filepath.Join(dir, "tls.key")
 	if c, err := tls.LoadX509KeyPair(crt, key); err == nil {
 		if leaf, err := x509.ParseCertificate(c.Certificate[0]); err == nil &&

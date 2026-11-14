@@ -1,6 +1,7 @@
-package main
+package scanner
 
 import (
+	"devdoctor/internal/config"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,7 +13,7 @@ import (
 
 var webUsers = map[string]bool{"www-data": true, "nginx": true, "apache": true, "http": true, "www": true}
 
-func scanRoots(cfg Config) []string {
+func scanRoots(cfg config.Config) []string {
 	roots := []string{"/var/www", "/srv", "/home", "/opt"}
 	return append(roots, cfg.ScanRoots...)
 }

@@ -1,8 +1,9 @@
-package main
+package scanner
 
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"devdoctor/internal/sh"
 	"encoding/pem"
 	"fmt"
 	"net"
@@ -30,7 +31,7 @@ func checkSSL(c *Collector) {
 			if fi, e := de.Info(); e != nil || fi.Size() > 1<<20 {
 				return nil
 			}
-			for _, m := range sslDirectiveRe.FindAllStringSubmatch(readFile(p), -1) {
+			for _, m := range sslDirectiveRe.FindAllStringSubmatch(sh.ReadFile(p), -1) {
 				paths[m[1]] = true
 			}
 			return nil

@@ -1,6 +1,8 @@
-package main
+package scanner
 
 import (
+	"devdoctor/internal/config"
+	"devdoctor/internal/sysinfo"
 	"sort"
 	"sync"
 	"time"
@@ -62,24 +64,25 @@ type Attacker struct {
 }
 
 type Report struct {
-	Started    time.Time     `json:"started"`
-	DurationMs int64         `json:"duration_ms"`
-	Score      int           `json:"score"`
-	Counts     map[string]int `json:"counts"`
-	Findings   []Finding     `json:"findings"`
-	Ports      []PortInfo    `json:"ports"`
-	Services   []ServiceInfo `json:"services"`
-	Certs      []CertInfo    `json:"certs"`
-	Versions   []VersionInfo `json:"versions"`
-	Projects   []ProjectInfo `json:"projects"`
-	Attackers  []Attacker    `json:"attackers"`
+	Started    time.Time       `json:"started"`
+	DurationMs int64           `json:"duration_ms"`
+	Score      int             `json:"score"`
+	Counts     map[string]int  `json:"counts"`
+	Findings   []Finding       `json:"findings"`
+	Ports      []PortInfo      `json:"ports"`
+	Services   []ServiceInfo   `json:"services"`
+	Certs      []CertInfo      `json:"certs"`
+	Versions   []VersionInfo   `json:"versions"`
+	Projects   []ProjectInfo   `json:"projects"`
+	Attackers  []Attacker      `json:"attackers"`
+	Containers []ContainerInfo `json:"containers"`
 }
 
 type Collector struct {
 	mu  sync.Mutex
 	R   Report
-	cfg Config
-	sam *Sampler
+	cfg config.Config
+	sam *sysinfo.Sampler
 }
 
 func (c *Collector) add(cat, sev, title, detail, fix string) {
@@ -92,8 +95,8 @@ type Scanner struct {
 	mu      sync.RWMutex
 	last    *Report
 	running bool
-	cfg     *ConfigStore
-	sam     *Sampler
+	cfg     *config.Store
+	sam     *sysinfo.Sampler
 	audits  sync.Map // caché de auditorías por proyecto
 }
 
@@ -134,6 +137,7 @@ func (s *Scanner) RunSync() *Report {
 		func() { checkProjects(c, s) },
 		func() { checkSecurity(c) },
 		func() { checkResources(c) },
+		func() { checkDocker(c, s) },
 	}
 	var wg sync.WaitGroup
 	for _, f := range checks {
@@ -155,15 +159,22 @@ func (s *Scanner) RunSync() *Report {
 		return a.Category < b.Category
 	})
 	r.Counts = map[string]int{}
-	score := 100
+	penalty := map[string]int{} // descuento acotado por categoría (máx. 35)
 	for _, f := range r.Findings {
 		r.Counts[f.Severity]++
 		switch f.Severity {
 		case "crit":
-			score -= 12
+			penalty[f.Category] += 12
 		case "warn":
-			score -= 4
+			penalty[f.Category] += 4
 		}
+	}
+	score := 100
+	for _, p := range penalty {
+		if p > 35 {
+			p = 35
+		}
+		score -= p
 	}
 	if score < 0 {
 		score = 0
@@ -174,3 +185,6 @@ func (s *Scanner) RunSync() *Report {
 	r.DurationMs = time.Since(r.Started).Milliseconds()
 	return r
 }
+
+// New crea un Scanner que lee su configuración del Store y recursos del Sampler.
+func New(cs *config.Store, sam *sysinfo.Sampler) *Scanner { return &Scanner{cfg: cs, sam: sam} }

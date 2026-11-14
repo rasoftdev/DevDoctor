@@ -1,6 +1,7 @@
-package main
+package server
 
 import (
+	"devdoctor/internal/config"
 	"sync"
 	"time"
 )
@@ -47,7 +48,7 @@ func (a *Auth) Fail(ip string) {
 func (a *Auth) Reset(ip string) { a.mu.Lock(); delete(a.fails, ip); a.mu.Unlock() }
 
 func (a *Auth) NewSession() string {
-	t := randomToken()
+	t := config.RandomToken()
 	a.mu.Lock()
 	a.sessions[t] = time.Now().Add(sessionTTL)
 	for k, exp := range a.sessions { // limpieza oportunista

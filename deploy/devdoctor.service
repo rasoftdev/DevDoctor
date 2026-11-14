@@ -1,0 +1,22 @@
+[Unit]
+Description=DevDoctor - diagnóstico y dashboard del servidor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/devdoctor run --config /etc/devdoctor/config.json
+Restart=on-failure
+RestartSec=3
+# DevDoctor sólo LEE el sistema; se restringe todo lo posible.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/etc/devdoctor
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

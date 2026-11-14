@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DevDoctor</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--panel2:#1c232c;--line:#2a323d;--text:#e6edf3;--mut:#8b96a3;--acc:#3fb8af;
+--crit:#f85149;--warn:#e3a008;--info:#58a6ff;--ok:#3fb950;--r:10px}
+@media (prefers-color-scheme:light){:root{--bg:#f4f6f8;--panel:#fff;--panel2:#f0f3f6;--line:#d8dee4;--text:#1f2328;--mut:#5b6670;--acc:#0f8b84;--crit:#cf222e;--warn:#9a6700;--info:#0969da;--ok:#1a7f37}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+button{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-color:var(--acc);color:#04201e;font-weight:600}
+input{font:inherit;width:100%;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+input:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.hidden{display:none!important}
+#login{min-height:100vh;display:grid;place-items:center;padding:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+#login .card{width:100%;max-width:360px;display:grid;gap:12px}
+h1{font-size:20px;margin:0}h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.err{color:var(--crit);min-height:1.2em;font-size:13px}
+header{display:flex;gap:12px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;position:sticky;top:0;background:var(--bg);z-index:5}
+header .sp{flex:1}.brand{font-weight:700;font-size:17px}.brand b{color:var(--acc)}
+main{padding:20px;max-width:1280px;margin:0 auto;display:grid;gap:16px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.kpi .v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}.kpi .s{color:var(--mut);font-size:12px}
+.spark{width:100%;height:42px;margin-top:6px;display:block}
+.score{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.ring{width:96px;height:96px}.ring text{fill:var(--text);font-weight:700;font-size:24px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid currentColor}
+.crit{color:var(--crit)}.warn{color:var(--warn)}.info{color:var(--info)}.ok{color:var(--ok)}
+.bar{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--mut);padding:9px 14px;white-space:nowrap}
+.tabs button.on{color:var(--text);border-color:var(--acc)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mut);font-weight:600;font-size:12px}tr:last-child td{border:0}
+.tw{overflow-x:auto}
+.f{border:1px solid var(--line);border-left:4px solid currentColor;border-radius:8px;padding:10px 14px;margin-bottom:8px;background:var(--panel)}
+.f .t{color:var(--text);font-weight:600}.f .m{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.f pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--mut);font-size:12.5px}
+.f .fix{margin-top:6px;color:var(--text);background:var(--panel2);border-radius:6px;padding:6px 9px}
+.filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.filters button.on{border-color:var(--acc);color:var(--acc)}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:var(--r);padding:20px;width:min(400px,92vw)}
+dialog::backdrop{background:#0008}dialog form{display:grid;gap:10px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.muted{color:var(--mut)}
+@media(max-width:600px){main{padding:12px}header{padding:10px 12px}}
+</style>
+</head>
+<body>
+
+<div id="login" class="hidden">
+  <form class="card" id="lf">
+    <div class="brand" style="font-size:22px">Dev<b>Doctor</b></div>
+    <div class="muted">Inicia sesión para ver el estado del servidor.</div>
+    <label>Usuario<input id="lu" autocomplete="username" required autofocus></label>
+    <label>Contraseña<input id="lp" type="password" autocomplete="current-password" required></label>
+    <div class="err" id="le"></div>
+    <button class="pri">Entrar</button>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <div class="brand">Dev<b>Doctor</b></div>
+    <div class="muted mono" id="hostline"></div>
+    <div class="sp"></div>
+    <button id="scanBtn" class="pri">Escanear ahora</button>
+    <button id="acctBtn">Cuenta</button>
+    <button id="outBtn">Salir</button>
+  </header>
+  <main>
+    <section class="card score">
+      <svg class="ring" viewBox="0 0 100 100" id="ring"></svg>
+      <div style="flex:1;min-width:220px">
+        <h2 style="margin-bottom:4px">Salud del servidor</h2>
+        <div id="scoreTxt" class="muted">Ejecutando primer diagnóstico…</div>
+        <div class="pills" id="pills" style="margin-top:8px"></div>
+      </div>
+    </section>
+
+    <section class="grid" id="kpis"></section>
+
+    <section class="two">
+      <div class="card"><h2>Discos</h2><div id="disks"></div></div>
+      <div class="card"><h2>Procesos con más CPU</h2><div class="tw"><table id="procs"></table></div></div>
+    </section>
+
+    <section class="card">
+      <div class="tabs" id="tabs"></div>
+      <div id="tabBody" style="padding-top:14px"></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="acct">
+  <form id="af">
+    <h1 style="font-size:17px">Cuenta</h1>
+    <label>Nuevo usuario (opcional)<input id="au" autocomplete="username"></label>
+    <label>Nueva contraseña (mín. 10)<input id="an" type="password" autocomplete="new-password"></label>
+    <label>Contraseña actual<input id="ac" type="password" autocomplete="current-password" required></label>
+    <div class="err" id="ae"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="ax">Cancelar</button><button class="pri">Guardar</button></div>
+  </form>
+</dialog>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const api=async(path,body)=>{const r=await fetch('/api/'+path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  let j={};try{j=await r.json()}catch{} if(r.status===401&&path!=='login'){showLogin();throw 0} if(!r.ok)throw new Error(j.error||'error');return j};
+const bytes=n=>{const u=['B','KB','MB','GB','TB'];let i=0;n=+n||0;while(n>=1024&&i<4){n/=1024;i++}return n.toFixed(i?1:0)+' '+u[i]};
+const dur=s=>{s=Math.floor(s);const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+'d ':'')+h+'h '+m+'m'};
+const col=p=>p>=90?'var(--crit)':p>=75?'var(--warn)':'var(--ok)';
+const SEV={crit:'Crítico',warn:'Aviso',info:'Info',ok:'OK'};
+let timers=[],tab='Hallazgos',sevF='all',REP=null,SCANNING=false;
+
+function spark(arr,color,max){arr=arr||[];if(arr.length<2)return'<svg class="spark"></svg>';
+  const m=max||Math.max(...arr,1),w=300,h=42,st=w/(arr.length-1);
+  const pts=arr.map((v,i)=>(i*st).toFixed(1)+','+(h-2-(v/m)*(h-6)).toFixed(1)).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polygon points="0,${h} ${pts} ${w},${h}" fill="${color}" opacity=".15"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`}
+
+function showLogin(){timers.forEach(clearInterval);timers=[];$('#app').classList.add('hidden');$('#login').classList.remove('hidden');$('#lu').focus()}
+async function showApp(){$('#login').classList.add('hidden');$('#app').classList.remove('hidden');
+  await Promise.all([pollMetrics(),pollReport()]);
+  timers.push(setInterval(()=>pollMetrics().catch(()=>{}),2000),setInterval(()=>pollReport().catch(()=>{}),SCANNING?2000:10000))}
+
+async function pollMetrics(){const m=await api('metrics');renderMetrics(m)}
+async function pollReport(){const j=await api('report');const was=SCANNING;SCANNING=j.running;REP=j.report;
+  $('#scanBtn').disabled=SCANNING;$('#scanBtn').textContent=SCANNING?'Escaneando…':'Escanear ahora';
+  renderReport(); if(SCANNING&&!was)setTimeout(()=>pollReport().catch(()=>{}),2000)}
+
+function renderMetrics(m){
+  $('#hostline').textContent=`${m.host} · ${m.os} · kernel ${m.kernel}`;
+  const memP=m.mem_total?m.mem_used/m.mem_total*100:0,swP=m.swap_total?m.swap_used/m.swap_total*100:0;
+  const H=m.history||{};
+  $('#kpis').innerHTML=[
+   `<div class="card kpi"><h2>CPU</h2><div class="v" style="color:${col(m.cpu)}">${m.cpu.toFixed(1)}%</div><div class="s">${m.cores} núcleos · ${esc(m.cpu_model||'')}</div>${spark(H.cpu,col(m.cpu),100)}</div>`,
+   `<div class="card kpi"><h2>Memoria</h2><div class="v" style="color:${col(memP)}">${memP.toFixed(0)}%</div><div class="s">${bytes(m.mem_used)} de ${bytes(m.mem_total)}</div>${spark(H.mem,col(memP),100)}</div>`,
+   `<div class="card kpi"><h2>Red</h2><div class="v" style="font-size:20px">↓ ${bytes(m.rx)}/s</div><div class="s">↑ ${bytes(m.tx)}/s</div>${spark(H.rx,'var(--info)')}</div>`,
+   `<div class="card kpi"><h2>Carga (1/5/15)</h2><div class="v">${m.load.map(x=>x.toFixed(2)).join(' ')}</div><div class="s">Swap ${m.swap_total?swP.toFixed(0)+'% de '+bytes(m.swap_total):'sin swap'} · zombies ${m.zombies}</div></div>`,
+   `<div class="card kpi"><h2>Uptime</h2><div class="v" style="font-size:20px">${dur(m.uptime_sec)}</div><div class="s mono">${(m.ips||[]).map(esc).join(' · ')}</div></div>`
+  ].join('');
+  $('#disks').innerHTML=(m.disks||[]).map(d=>`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between"><span class="mono">${esc(d.mount)} <span class="muted">${esc(d.type)}</span></span><span>${bytes(d.used)} / ${bytes(d.total)} · <b style="color:${col(d.pct)}">${d.pct.toFixed(0)}%</b></span></div><div class="bar"><i style="width:${Math.min(d.pct,100)}%;background:${col(d.pct)}"></i></div>${d.inode_pct>=70?`<div class="s warn">Inodos al ${d.inode_pct}%</div>`:''}</div>`).join('')||'<span class="muted">Sin datos</span>';
+  $('#procs').innerHTML='<tr><th>PID</th><th>Usuario</th><th>CPU</th><th>MEM</th><th>Comando</th></tr>'+(m.procs||[]).map(p=>`<tr><td>${p.pid}</td><td>${esc(p.user)}</td><td>${p.cpu}%</td><td>${p.mem}%</td><td class="mono">${esc(p.cmd)}</td></tr>`).join('');
+}
+
+function ring(score){const c=2*Math.PI*42,col=score>=80?'var(--ok)':score>=55?'var(--warn)':'var(--crit)';
+  $('#ring').innerHTML=`<circle cx="50" cy="50" r="42" fill="none" stroke="var(--panel2)" stroke-width="9"/><circle cx="50" cy="50" r="42" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c*score/100} ${c}" transform="rotate(-90 50 50)"/><text x="50" y="58" text-anchor="middle">${score}</text>`}
+
+function renderReport(){
+  const r=REP;
+  if(!r){ring(0);$('#scoreTxt').textContent=SCANNING?'Ejecutando primer diagnóstico…':'Aún no hay diagnóstico';renderTabs();return}
+  ring(r.score);
+  $('#scoreTxt').textContent=`Último diagnóstico: ${new Date(r.started).toLocaleString()} · ${(r.duration_ms/1000).toFixed(1)}s`;
+  $('#pills').innerHTML=['crit','warn','info'].map(k=>`<span class="pill ${k}">${r.counts[k]||0} ${SEV[k].toLowerCase()}${(r.counts[k]||0)==1?'':'s'}</span>`).join('');
+  renderTabs();
+}
+
+const TABS=['Hallazgos','Puertos','Servicios','SSL','Versiones','Proyectos','Contenedores','Seguridad'];
+function renderTabs(){
+  $('#tabs').innerHTML=TABS.map(t=>`<button class="${t===tab?'on':''}" data-t="${t}">${t}</button>`).join('');
+  $('#tabs').onclick=e=>{if(e.target.dataset.t){tab=e.target.dataset.t;renderTabs()}};
+  const r=REP||{};let h='';
+  const tbl=(head,rows)=>rows.length?`<div class="tw"><table><tr>${head.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.join('')}</table></div>`:'<span class="muted">Nada que mostrar.</span>';
+  const fl=(list)=>list.length?list.map(f=>`<div class="f ${f.severity}"><div class="m">${SEV[f.severity]} · ${esc(f.category)}</div><div class="t">${esc(f.title)}</div>${f.detail?`<pre>${esc(f.detail)}</pre>`:''}${f.fix?`<div class="fix mono">→ ${esc(f.fix)}</div>`:''}</div>`).join(''):'<span class="muted">Sin hallazgos en esta categoría. 🎉</span>';
+  if(tab==='Hallazgos'){const all=r.findings||[];
+    h=`<div class="filters">${['all','crit','warn','info'].map(k=>`<button data-s="${k}" class="${sevF===k?'on':''}">${k==='all'?'Todos':SEV[k]}</button>`).join('')}</div>`+fl(all.filter(f=>sevF==='all'||f.severity===sevF))}
+  else if(tab==='Puertos')h=tbl(['Puerto','Proto','Escucha en','Proceso','Estado'],(r.ports||[]).map(p=>`<tr><td><b>${p.port}</b></td><td>${esc(p.proto)}</td><td class="mono">${esc(p.addr)}</td><td>${esc(p.process||'—')}${p.pid?` <span class="muted">(${p.pid})</span>`:''}</td><td>${p.note?`<span class="crit">${esc(p.note)}</span>`:p.exposed?'<span class="warn">Pública</span>':'<span class="ok">Solo local</span>'}</td></tr>`));
+  else if(tab==='Servicios')h=tbl(['Servicio','Estado','Arranque'],(r.services||[]).map(s=>`<tr><td><b>${esc(s.name)}</b></td><td class="${s.active==='active'?'ok':s.enabled==='enabled'?'crit':'muted'}">${esc(s.active)}</td><td>${esc(s.enabled)}</td></tr>`))+fl((r.findings||[]).filter(f=>f.category==='Servicios'));
+  else if(tab==='SSL')h=tbl(['Dominios','Emisor','Expira','Días','Ruta'],(r.certs||[]).map(c=>`<tr><td>${esc((c.dns&&c.dns.length?c.dns.join(', '):c.subject))}${c.self_signed?' <span class="info">(autofirmado)</span>':''}</td><td>${esc(c.issuer)}</td><td>${new Date(c.not_after).toLocaleDateString()}</td><td class="${c.days_left<=14?'crit':c.days_left<=30?'warn':'ok'}"><b>${c.days_left}</b></td><td class="mono">${esc(c.path)}</td></tr>`))+'<div style="height:12px"></div>'+fl((r.findings||[]).filter(f=>f.category==='SSL'&&!/expira|EXPIRADO/.test(f.title)));
+  else if(tab==='Versiones')h=tbl(['Software','Versión','Estado'],(r.versions||[]).map(v=>`<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.version)}</td><td class="${v.status}">${esc(v.note||'OK')}</td></tr>`));
+  else if(tab==='Proyectos')h=tbl(['Proyecto','Tipo','Requiere','Vulnerabilidades','Problemas'],(r.projects||[]).map(p=>`<tr><td class="mono">${esc(p.path)}</td><td>${esc(p.framework||'—')}</td><td class="mono">${esc([p.php_req&&'php '+p.php_req,p.node_req&&'node '+p.node_req].filter(Boolean).join(' · ')||'—')}</td><td>${p.vulns?Object.entries(p.vulns).filter(([k])=>k==='composer'||k==='npm').map(([k,v])=>`<span class="${v?'crit':'ok'}">${k}: ${v}</span>`).join(' · '):'<span class="muted">no auditado</span>'}</td><td class="${p.issues?'warn':'ok'}">${p.issues}</td></tr>`))+'<div style="height:12px"></div>'+fl((r.findings||[]).filter(f=>f.category==='Dependencias'));
+  else if(tab==='Contenedores')h=tbl(['Contenedor','Imagen','Estado','Versiones internas','CPU / RAM','CVEs','Puertos'],(r.containers||[]).map(c=>'<tr><td><b>'+esc(c.name)+'</b><div class="muted">'+esc(c.user)+(c.restarts?' · '+c.restarts+' reinicios':'')+'</div></td><td class="mono">'+esc(c.image)+'<div class="muted">'+(c.age_days?c.age_days+' días':'')+'</div></td><td class="'+(c.state==='running'?'ok':'crit')+'">'+esc(c.state)+'</td><td>'+((c.versions||[]).map(v=>'<span class="'+v.status+'">'+esc(v.name+' '+v.version)+'</span>').join('<br>')||'<span class="muted">—</span>')+'</td><td class="mono">'+esc(c.cpu||'—')+'<div class="muted">'+esc(c.mem||'')+'</div></td><td>'+(c.vulns?'<span class="'+(c.vulns.critical?'crit':c.vulns.high?'warn':'ok')+'">'+(c.vulns.critical||0)+' crít / '+(c.vulns.high||0)+' altas</span>':'<span class="muted">sin escanear</span>')+'</td><td class="mono">'+esc((c.ports||[]).join(', ')||'—')+'</td></tr>'))+'<div style="height:12px"></div>'+fl((r.findings||[]).filter(f=>f.category==='Docker'));
+  else if(tab==='Seguridad')h=(r.attackers&&r.attackers.length?`<h2>Intentos fallidos de SSH (24 h)</h2>`+tbl(['IP','Intentos'],r.attackers.map(a=>`<tr><td class="mono">${esc(a.ip)}</td><td><b>${a.count}</b></td></tr>`))+'<div style="height:14px"></div>':'')+fl((r.findings||[]).filter(f=>['Seguridad','Permisos','Recursos'].includes(f.category)));
+  $('#tabBody').innerHTML=h;
+  $('#tabBody').onclick=e=>{if(e.target.dataset.s){sevF=e.target.dataset.s;renderTabs()}};
+}
+
+$('#lf').onsubmit=async e=>{e.preventDefault();$('#le').textContent='';
+  try{await api('login',{username:$('#lu').value,password:$('#lp').value});$('#lp').value='';await showApp()}catch(x){$('#le').textContent=x.message||''}};
+$('#outBtn').onclick=async()=>{await api('logout',{}).catch(()=>{});showLogin()};
+$('#scanBtn').onclick=async()=>{await api('scan',{});SCANNING=true;await pollReport()};
+$('#acctBtn').onclick=()=>{$('#ae').textContent='';$('#acct').showModal()};
+$('#ax').onclick=()=>$('#acct').close();
+$('#af').onsubmit=async e=>{e.preventDefault();$('#ae').textContent='';
+  try{await api('account',{current:$('#ac').value,username:$('#au').value,password:$('#an').value});$('#acct').close();['#ac','#au','#an'].forEach(s=>$(s).value='');alert('Cuenta actualizada. Inicia sesión de nuevo.');showLogin()}catch(x){$('#ae').textContent=x.message||''}};
+
+api('me').then(showApp).catch(()=>showLogin());
+</script>
+</body>
+</html>

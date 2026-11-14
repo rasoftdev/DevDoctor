@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"crypto/pbkdf2"
@@ -28,13 +28,13 @@ type Config struct {
 	ScanIntervalMin int      `json:"scan_interval_min"`
 }
 
-type ConfigStore struct {
+type Store struct {
 	mu   sync.RWMutex
 	path string
 	cfg  Config
 }
 
-func defaultConfigPath() string {
+func DefaultPath() string {
 	if p := os.Getenv("DEVDOCTOR_CONFIG"); p != "" {
 		return p
 	}
@@ -44,12 +44,12 @@ func defaultConfigPath() string {
 	return "devdoctor.json"
 }
 
-func loadConfig(path string) (*ConfigStore, error) {
+func Load(path string) (*Store, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	s := &ConfigStore{path: path}
+	s := &Store{path: path}
 	if err := json.Unmarshal(b, &s.cfg); err != nil {
 		return nil, err
 	}
@@ -59,20 +59,20 @@ func loadConfig(path string) (*ConfigStore, error) {
 	return s, nil
 }
 
-func (s *ConfigStore) Get() Config {
+func (s *Store) Get() Config {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg
 }
 
-func (s *ConfigStore) Update(fn func(c *Config)) error {
+func (s *Store) Update(fn func(c *Config)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	fn(&s.cfg)
 	return s.saveLocked()
 }
 
-func (s *ConfigStore) saveLocked() error {
+func (s *Store) saveLocked() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (c *Config) CheckLogin(user, pw string) bool {
 	return okPass && okUser
 }
 
-func randomPassword(n int) string {
+func RandomPassword(n int) string {
 	const alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	out := make([]byte, n)
 	for i := range out {
@@ -126,8 +126,14 @@ func randomPassword(n int) string {
 	return string(out)
 }
 
-func randomToken() string {
+func RandomToken() string {
 	b := make([]byte, 32)
 	rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
+// New crea un Store en memoria asociado a una ruta (no escribe hasta Update).
+func New(path string, cfg Config) *Store { return &Store{path: path, cfg: cfg} }
+
+// Path devuelve la ruta del archivo de configuración.
+func (s *Store) Path() string { return s.path }
