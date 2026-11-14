@@ -63,8 +63,8 @@ func checkDocker(c *Collector, s *Scanner) {
 		return
 	}
 	if out, err := sh.Run(10*time.Second, "docker", "info", "--format", "{{.ServerVersion}}"); err != nil {
-		c.add("Docker", "info", "Docker está instalado pero no responde", sh.Trunc(out, 300),
-			"systemctl status docker  ·  ¿tiene DevDoctor acceso a /var/run/docker.sock?")
+		c.add("Docker", "info", "Docker is installed but not responding", sh.Trunc(out, 300),
+			"systemctl status docker  ·  does DevDoctor have access to /var/run/docker.sock?")
 		return
 	}
 	ids, _ := sh.Run(10*time.Second, "docker", "ps", "-aq")
@@ -81,7 +81,7 @@ func checkDocker(c *Collector, s *Scanner) {
 		return
 	}
 
-	// Antigüedad de imágenes (una sola llamada).
+	// Image age (single call).
 	imgAge := map[string]int{}
 	imgSet := map[string]bool{}
 	for _, ct := range cts {
@@ -102,7 +102,7 @@ func checkDocker(c *Collector, s *Scanner) {
 		}
 	}
 
-	// CPU/RAM por contenedor.
+	// CPU/RAM per container.
 	stats := map[string][2]string{}
 	if o, _ := sh.RunStdout(20*time.Second, "", "docker", "stats", "--no-stream", "--format", "{{json .}}"); o != "" {
 		for _, l := range strings.Split(o, "\n") {
@@ -139,8 +139,8 @@ func checkDocker(c *Collector, s *Scanner) {
 				info.Ports = append(info.Ports, fmt.Sprintf("%s→%s", b.HostPort, p))
 				cont := strings.Split(p, "/")[0]
 				if r, ok := riskyPorts[atoi(cont)]; ok && pub && r.sev == "crit" {
-					c.add("Docker", "crit", fmt.Sprintf("Contenedor «%s» publica %s (puerto %s) a toda la red", name, r.name, b.HostPort), "",
-						fmt.Sprintf("Publica solo en loopback: -p 127.0.0.1:%s:%s", b.HostPort, cont))
+					c.add("Docker", "crit", M("Container \"%s\" publishes %s (port %s) to the whole network", name, r.name, b.HostPort), "",
+						fmt.Sprintf("-p 127.0.0.1:%s:%s", b.HostPort, cont))
 				}
 			}
 		}
@@ -151,10 +151,10 @@ func checkDocker(c *Collector, s *Scanner) {
 			latestOnes = append(latestOnes, name+" ("+tag+")")
 		}
 
-		// hallazgos de configuración / estado
 		if ct.HostConfig.Privileged {
-			c.add("Docker", "crit", fmt.Sprintf("Contenedor «%s» corre en modo --privileged", name),
-				"Tiene acceso casi total al anfitrión: un fallo dentro del contenedor compromete el servidor.", "Quita privileged y concede solo las capabilities necesarias (--cap-add).")
+			c.add("Docker", "crit", M("Container \"%s\" runs in --privileged mode", name),
+				"It has near-total access to the host: a flaw inside the container compromises the server.",
+				"Drop privileged and grant only the needed capabilities (--cap-add).")
 		}
 		socks := append([]string{}, ct.HostConfig.Binds...)
 		for _, m := range ct.Mounts {
@@ -162,33 +162,34 @@ func checkDocker(c *Collector, s *Scanner) {
 		}
 		for _, b := range socks {
 			if strings.Contains(b, "/var/run/docker.sock") || strings.Contains(b, "/run/docker.sock") {
-				c.add("Docker", "crit", fmt.Sprintf("Contenedor «%s» monta docker.sock", name),
-					"Equivale a dar root del anfitrión a todo lo que corra dentro.", "Evita montarlo o usa un proxy de socket de solo lectura (docker-socket-proxy).")
+				c.add("Docker", "crit", M("Container \"%s\" mounts docker.sock", name),
+					"This is equivalent to giving host root to anything running inside.",
+					"Avoid mounting it, or use a read-only socket proxy (docker-socket-proxy).")
 				break
 			}
 		}
 		switch {
 		case ct.State.Restarting:
 			logs, _ := sh.Run(8*time.Second, "docker", "logs", "--tail", "6", name)
-			c.add("Docker", "crit", fmt.Sprintf("Contenedor «%s» en bucle de reinicios (%d reinicios)", name, ct.RestartCount), sh.Trunc(logs, 500), "docker logs "+name)
+			c.add("Docker", "crit", M("Container \"%s\" is in a restart loop (%d restarts)", name, ct.RestartCount), sh.Trunc(logs, 500), "docker logs "+name)
 		case ct.State.OOMKilled:
-			c.add("Docker", "crit", fmt.Sprintf("Contenedor «%s» fue matado por falta de memoria (OOM)", name), "", "Aumenta --memory o reduce el consumo de la app.")
+			c.add("Docker", "crit", M("Container \"%s\" was killed for lack of memory (OOM)", name), "", "Increase --memory or reduce the app's consumption.")
 		case !ct.State.Running && ct.State.ExitCode != 0:
 			logs, _ := sh.Run(8*time.Second, "docker", "logs", "--tail", "6", name)
-			c.add("Docker", "warn", fmt.Sprintf("Contenedor «%s» terminó con error (código %d)", name, ct.State.ExitCode), sh.Trunc(logs, 500), "docker logs "+name)
+			c.add("Docker", "warn", M("Container \"%s\" exited with an error (code %d)", name, ct.State.ExitCode), sh.Trunc(logs, 500), "docker logs "+name)
 		case ct.RestartCount > 5:
-			c.add("Docker", "warn", fmt.Sprintf("Contenedor «%s» se ha reiniciado %d veces", name, ct.RestartCount), "", "docker logs "+name)
+			c.add("Docker", "warn", M("Container \"%s\" has restarted %d times", name, ct.RestartCount), "", "docker logs "+name)
 		}
 		switch {
 		case info.AgeDays > 540:
-			c.add("Docker", "warn", fmt.Sprintf("La imagen de «%s» tiene %d días sin reconstruirse", name, info.AgeDays), ct.Config.Image, "Reconstruye/actualiza la imagen base para recibir parches de seguridad.")
+			c.add("Docker", "warn", M("The image of \"%s\" has not been rebuilt for %d days", name, info.AgeDays), ct.Config.Image,
+				"Rebuild/update the base image to get security patches.")
 		case info.AgeDays > 240:
-			c.add("Docker", "info", fmt.Sprintf("La imagen de «%s» tiene %d días", name, info.AgeDays), ct.Config.Image, "docker pull / reconstruir.")
+			c.add("Docker", "info", M("The image of \"%s\" is %d days old", name, info.AgeDays), ct.Config.Image, "docker pull / rebuild.")
 		}
-
 		infos[i] = info
 
-		// versiones internas (contenedores en ejecución)
+		// internal versions (running containers)
 		if ct.State.Running {
 			wg.Add(1)
 			sem <- struct{}{}
@@ -198,8 +199,8 @@ func checkDocker(c *Collector, s *Scanner) {
 				vs := containerVersions(ct)
 				for _, v := range vs {
 					if v.Status == "crit" || v.Status == "warn" {
-						c.add("Docker", v.Status, fmt.Sprintf("«%s»: %s %s — %s", name, v.Name, v.Version, v.Note), "Imagen: "+ct.Config.Image,
-							"Actualiza la imagen a una versión con soporte (cambia el tag en tu Dockerfile/compose y reconstruye).")
+						c.add("Docker", v.Status, M("\"%s\": %s %s — %s", name, v.Name, v.Version, v.noteM), M("Image: %s", ct.Config.Image),
+							"Update the image to a supported version (change the tag in your Dockerfile/compose and rebuild).")
 					}
 				}
 				mu.Lock()
@@ -211,11 +212,12 @@ func checkDocker(c *Collector, s *Scanner) {
 	wg.Wait()
 
 	if len(latestOnes) > 0 {
-		c.add("Docker", "warn", fmt.Sprintf("%d contenedores usan etiqueta «latest» o sin versión fija", len(latestOnes)), strings.Join(latestOnes, "\n"),
-			"Fija versiones concretas (p. ej. php:8.3-fpm) para despliegues reproducibles.")
+		c.add("Docker", "warn", M("%d containers use the \"latest\" tag or no pinned version", len(latestOnes)), strings.Join(latestOnes, "\n"),
+			"Pin concrete versions (e.g. php:8.3-fpm) for reproducible deployments.")
 	}
 	if len(rootOnes) > 0 {
-		c.add("Docker", "info", fmt.Sprintf("%d contenedores corren como root", len(rootOnes)), strings.Join(rootOnes, ", "), "Usa USER no privilegiado en el Dockerfile o --user.")
+		c.add("Docker", "info", M("%d containers run as root", len(rootOnes)), strings.Join(rootOnes, ", "),
+			"Use a non-privileged USER in the Dockerfile or --user.")
 	}
 
 	scanImagesTrivy(c, s, cts, infos)
@@ -234,14 +236,14 @@ func containerVersions(ct dockerInspect) []VersionInfo {
 	}
 	var out []VersionInfo
 	add := func(name, v string) {
-		st, note := "ok", ""
+		st, note := "ok", Msg{}
 		switch name {
 		case "PHP":
 			st, note = phpStatus(v)
 		case "Node.js":
 			st, note = nodeStatus(v)
 		}
-		out = append(out, VersionInfo{name, v, st, note})
+		out = append(out, mkVer(name, v, st, note))
 	}
 	have := map[string]bool{}
 	if v := env["PHP_VERSION"]; v != "" {
@@ -262,7 +264,7 @@ func containerVersions(ct dockerInspect) []VersionInfo {
 		add("Nginx", v)
 		have["Nginx"] = true
 	}
-	// Complemento con docker exec para lo que no venga en el entorno (si hay shell).
+	// Complement with docker exec for whatever the environment lacks (if there is a shell).
 	if !have["PHP"] || !have["Node.js"] || !have["Nginx"] {
 		res, err := sh.Run(8*time.Second, "docker", "exec", ct.ID, "sh", "-c",
 			"php -v 2>/dev/null | head -1; node -v 2>/dev/null; nginx -v 2>&1 | head -1")
@@ -274,7 +276,8 @@ func containerVersions(ct dockerInspect) []VersionInfo {
 				add("Nginx", m[1])
 			}
 			for _, l := range strings.Split(res, "\n") {
-				if m := reNode.FindStringSubmatch(strings.TrimSpace(l)); m != nil && strings.HasPrefix(strings.TrimSpace(l), "v") && !have["Node.js"] {
+				l = strings.TrimSpace(l)
+				if m := reNode.FindStringSubmatch(l); m != nil && strings.HasPrefix(l, "v") && !have["Node.js"] {
 					add("Node.js", m[1])
 				}
 			}
@@ -283,11 +286,11 @@ func containerVersions(ct dockerInspect) []VersionInfo {
 	return out
 }
 
-// scanImagesTrivy usa trivy (si existe) para contar CVEs HIGH/CRITICAL por imagen.
+// scanImagesTrivy uses trivy (if present) to count HIGH/CRITICAL CVEs per image.
 func scanImagesTrivy(c *Collector, s *Scanner, cts []dockerInspect, infos []ContainerInfo) {
 	if !sh.Have("trivy") {
-		c.add("Docker", "info", "Para detectar CVEs dentro de las imágenes instala trivy",
-			"DevDoctor lo usará automáticamente cuando esté disponible.", "apt install trivy  (o https://trivy.dev)")
+		c.add("Docker", "info", "Install trivy to detect CVEs inside the images",
+			"DevDoctor will use it automatically once it is available.", "apt install trivy  (or https://trivy.dev)")
 		return
 	}
 	done := map[string]map[string]int{}
@@ -330,10 +333,10 @@ func scanImagesTrivy(c *Collector, s *Scanner, cts []dockerInspect, infos []Cont
 		}
 		infos[i].Vulns = counts
 		if counts["critical"] > 0 {
-			c.add("Docker", "crit", fmt.Sprintf("Imagen %s: %d CVEs críticos y %d altos", ct.Config.Image, counts["critical"], counts["high"]),
-				"Contenedor: "+infos[i].Name, "Actualiza la imagen base: docker pull + reconstruir. Detalle: trivy image "+ct.Config.Image)
+			c.add("Docker", "crit", M("Image %s: %d critical and %d high CVEs", ct.Config.Image, counts["critical"], counts["high"]),
+				M("Container: %s", infos[i].Name), M("Update the base image: docker pull + rebuild. Details: trivy image %s", ct.Config.Image))
 		} else if counts["high"] > 0 {
-			c.add("Docker", "warn", fmt.Sprintf("Imagen %s: %d CVEs altos", ct.Config.Image, counts["high"]), "Contenedor: "+infos[i].Name, "trivy image "+ct.Config.Image)
+			c.add("Docker", "warn", M("Image %s: %d high CVEs", ct.Config.Image, counts["high"]), M("Container: %s", infos[i].Name), "trivy image "+ct.Config.Image)
 		}
 	}
 }

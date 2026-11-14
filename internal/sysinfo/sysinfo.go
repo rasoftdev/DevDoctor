@@ -27,10 +27,12 @@ type Proc struct {
 	Cmd  string  `json:"cmd"`
 }
 type History struct {
-	CPU []float64 `json:"cpu"`
-	Mem []float64 `json:"mem"`
-	Rx  []float64 `json:"rx"`
-	Tx  []float64 `json:"tx"`
+	CPU   []float64 `json:"cpu"`
+	Mem   []float64 `json:"mem"`
+	Rx    []float64 `json:"rx"`
+	Tx    []float64 `json:"tx"`
+	DiskR []float64 `json:"disk_r"`
+	DiskW []float64 `json:"disk_w"`
 }
 type Snapshot struct {
 	Host      string     `json:"host"`
@@ -45,6 +47,21 @@ type Snapshot struct {
 	MemUsed   uint64     `json:"mem_used"`
 	SwapTotal uint64     `json:"swap_total"`
 	SwapUsed  uint64     `json:"swap_used"`
+	MemCached uint64     `json:"mem_cached"`
+	MemAvail  uint64     `json:"mem_avail"`
+	CPUBreak  CPUBreak   `json:"cpu_break"`
+	DiskRead  float64    `json:"disk_read"`
+	DiskWrite float64    `json:"disk_write"`
+	DiskIOPS  float64    `json:"disk_iops"`
+	RxPkts    float64    `json:"rx_pkts"`
+	TxPkts    float64    `json:"tx_pkts"`
+	NetErrs   uint64     `json:"net_errs"`
+	Conns     Conns      `json:"conns"`
+	Tasks     Tasks      `json:"tasks"`
+	FDUsed    uint64     `json:"fd_used"`
+	FDMax     uint64     `json:"fd_max"`
+	TempC     float64    `json:"temp_c"`
+	PSI       PSI        `json:"psi"`
 	Rx        float64    `json:"rx"`
 	Tx        float64    `json:"tx"`
 	Disks     []Disk     `json:"disks"`
@@ -63,6 +80,9 @@ type Sampler struct {
 	prevIdle, prevTotal uint64
 	prevRx, prevTx      uint64
 	prevT               time.Time
+	cpuBreak            CPUBreak
+	prev                [8]uint64
+	exs                 extraState
 }
 
 const histLen = 90
@@ -94,6 +114,7 @@ func (s *Sampler) Get() Snapshot {
 	sn.History = History{
 		CPU: append([]float64(nil), s.hist.CPU...), Mem: append([]float64(nil), s.hist.Mem...),
 		Rx: append([]float64(nil), s.hist.Rx...), Tx: append([]float64(nil), s.hist.Tx...),
+		DiskR: append([]float64(nil), s.hist.DiskR...), DiskW: append([]float64(nil), s.hist.DiskW...),
 	}
 	return sn
 }
@@ -121,7 +142,8 @@ func (s *Sampler) static() {
 
 func (s *Sampler) tick(i int) {
 	cpu := s.readCPU()
-	mt, mu, st, su := readMem()
+	mt, mu, st, su, cached, avail := readMem()
+	ex := s.sampleExtra(i)
 	rx, tx := s.readNet()
 	var load [3]float64
 	if f := strings.Fields(sh.ReadFile("/proc/loadavg")); len(f) >= 3 {
@@ -147,6 +169,12 @@ func (s *Sampler) tick(i int) {
 	sn := &s.snap
 	sn.CPU, sn.MemTotal, sn.MemUsed, sn.SwapTotal, sn.SwapUsed = cpu, mt, mu, st, su
 	sn.Rx, sn.Tx, sn.Load, sn.UptimeSec, sn.Time = rx, tx, load, up, time.Now()
+	sn.MemCached, sn.MemAvail, sn.CPUBreak = cached, avail, s.cpuBreak
+	sn.DiskRead, sn.DiskWrite, sn.DiskIOPS = ex.DiskRead, ex.DiskWrite, ex.DiskIOPS
+	sn.RxPkts, sn.TxPkts, sn.NetErrs = ex.RxPkts, ex.TxPkts, ex.NetErrs
+	if ex.slow {
+		sn.Conns, sn.Tasks, sn.FDUsed, sn.FDMax, sn.TempC, sn.PSI = ex.Conns, ex.Tasks, ex.FDUsed, ex.FDMax, ex.TempC, ex.PSI
+	}
 	if disks != nil {
 		sn.Disks = disks
 		sn.IPs = localIPs()
@@ -160,6 +188,7 @@ func (s *Sampler) tick(i int) {
 	}
 	s.hist.CPU, s.hist.Mem = push(s.hist.CPU, cpu), push(s.hist.Mem, mp)
 	s.hist.Rx, s.hist.Tx = push(s.hist.Rx, rx), push(s.hist.Tx, tx)
+	s.hist.DiskR, s.hist.DiskW = push(s.hist.DiskR, ex.DiskRead), push(s.hist.DiskW, ex.DiskWrite)
 }
 
 func (s *Sampler) readCPU() float64 {
@@ -169,8 +198,10 @@ func (s *Sampler) readCPU() float64 {
 		return 0
 	}
 	var total, idle uint64
+	var cur [8]uint64
 	for i := 1; i < len(f) && i <= 8; i++ {
 		v, _ := strconv.ParseUint(f[i], 10, 64)
+		cur[i-1] = v
 		total += v
 		if i == 4 || i == 5 {
 			idle += v
@@ -178,14 +209,18 @@ func (s *Sampler) readCPU() float64 {
 	}
 	dt, di := total-s.prevTotal, idle-s.prevIdle
 	first := s.prevTotal == 0
-	s.prevTotal, s.prevIdle = total, idle
+	p := s.prev
+	s.prevTotal, s.prevIdle, s.prev = total, idle, cur
 	if first || dt == 0 {
 		return 0
 	}
+	pct := func(n uint64) float64 { return float64(n) / float64(dt) * 100 }
+	// cur: user nice system idle iowait irq softirq steal
+	s.cpuBreak = CPUBreak{User: pct(cur[0] - p[0] + cur[1] - p[1]), System: pct(cur[2] - p[2] + cur[5] - p[5] + cur[6] - p[6]), IOWait: pct(cur[4] - p[4]), Steal: pct(cur[7] - p[7])}
 	return float64(dt-di) / float64(dt) * 100
 }
 
-func readMem() (total, used, swapT, swapU uint64) {
+func readMem() (total, used, swapT, swapU, cached, avail uint64) {
 	m := map[string]uint64{}
 	for _, l := range strings.Split(sh.ReadFile("/proc/meminfo"), "\n") {
 		f := strings.Fields(l)
@@ -195,13 +230,15 @@ func readMem() (total, used, swapT, swapU uint64) {
 		}
 	}
 	total = m["MemTotal"]
-	avail, ok := m["MemAvailable"]
+	var ok bool
+	avail, ok = m["MemAvailable"]
 	if !ok {
 		avail = m["MemFree"] + m["Buffers"] + m["Cached"]
 	}
 	if total > avail {
 		used = total - avail
 	}
+	cached = m["Cached"] + m["SReclaimable"] + m["Buffers"]
 	swapT = m["SwapTotal"]
 	if swapT > m["SwapFree"] {
 		swapU = swapT - m["SwapFree"]
@@ -239,7 +276,7 @@ func (s *Sampler) readNet() (rx, tx float64) {
 }
 
 func readDisks() []Disk {
-	out, err := sh.Run(8*time.Second, "df", "-PT", "-B1", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "overlay", "-x", "efivarfs")
+	out, err := sh.Run(8*time.Second, "df", "-PT", "-B1", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "overlay", "-x", "efivarfs", "-x", "fuse.snapfuse", "-x", "iso9660")
 	if err != nil && out == "" {
 		return nil
 	}
@@ -263,6 +300,9 @@ func readDisks() []Disk {
 		}
 		t, _ := strconv.ParseUint(f[2], 10, 64)
 		u, _ := strconv.ParseUint(f[3], 10, 64)
+		if strings.HasPrefix(f[6], "/snap/") || strings.HasPrefix(f[6], "/var/lib/snapd/") || strings.HasPrefix(f[6], "/usr/src/linux-headers") {
+			continue
+		}
 		if t == 0 {
 			continue
 		}

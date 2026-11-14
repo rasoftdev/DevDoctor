@@ -18,13 +18,13 @@ func ValidatePassword(user, pw string) error {
 	n := len([]rune(pw))
 	switch {
 	case n < 10:
-		return errors.New("la contraseña debe tener al menos 10 caracteres")
+		return errors.New("password must be at least 10 characters")
 	case n > 128:
-		return errors.New("la contraseña no puede superar 128 caracteres")
+		return errors.New("password must not exceed 128 characters")
 	}
 	low := strings.ToLower(pw)
 	if u := strings.ToLower(strings.TrimSpace(user)); len(u) >= 3 && strings.Contains(low, u) {
-		return errors.New("la contraseña no puede contener tu nombre de usuario")
+		return errors.New("password must not contain your username")
 	}
 	same := true
 	for _, r := range pw {
@@ -34,7 +34,7 @@ func ValidatePassword(user, pw string) error {
 		}
 	}
 	if same {
-		return errors.New("la contraseña no puede ser un solo carácter repetido")
+		return errors.New("password cannot be a single repeated character")
 	}
 	var lower, upper, digit, symbol bool
 	for _, r := range pw {
@@ -58,11 +58,11 @@ func ValidatePassword(user, pw string) error {
 	if n < 16 {
 		for _, w := range weakParts {
 			if strings.Contains(low, w) {
-				return errors.New("la contraseña contiene una palabra o secuencia demasiado común; usa una frase más larga (16+ caracteres) o algo menos predecible")
+				return errors.New("password contains a word or sequence that is too common; use a longer passphrase (16+ characters) or something less predictable")
 			}
 		}
 		if classes < 3 {
-			return errors.New("mezcla al menos 3 tipos (minúsculas, mayúsculas, números, símbolos) o usa una frase de 16+ caracteres")
+			return errors.New("mix at least 3 character types (lowercase, uppercase, digits, symbols) or use a passphrase of 16+ characters")
 		}
 	}
 	return nil

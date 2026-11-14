@@ -1,12 +1,12 @@
 package scanner
 
 import (
-	"devdoctor/internal/sh"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"devdoctor/internal/sh"
 )
 
 type riskyPort struct {
@@ -15,11 +15,11 @@ type riskyPort struct {
 }
 
 var riskyPorts = map[int]riskyPort{
-	21: {"FTP (sin cifrar)", "warn"}, 23: {"Telnet", "crit"}, 1433: {"SQL Server", "crit"},
+	21: {"FTP (unencrypted)", "warn"}, 23: {"Telnet", "crit"}, 1433: {"SQL Server", "crit"},
 	3306: {"MySQL/MariaDB", "crit"}, 3389: {"RDP", "warn"}, 5432: {"PostgreSQL", "crit"},
 	5900: {"VNC", "warn"}, 5984: {"CouchDB", "crit"}, 6379: {"Redis", "crit"},
 	9200: {"Elasticsearch", "crit"}, 11211: {"Memcached", "crit"}, 27017: {"MongoDB", "crit"},
-	2375: {"Docker API sin TLS", "crit"},
+	2375: {"Docker API without TLS", "crit"},
 }
 
 var procRe = regexp.MustCompile(`\("([^"]+)",pid=(\d+)`)
@@ -32,7 +32,7 @@ func checkPortsServices(c *Collector) {
 func scanPorts(c *Collector) []PortInfo {
 	out, err := sh.Run(10*time.Second, "ss", "-H", "-tulnp")
 	if err != nil && out == "" {
-		c.add("Puertos", "info", "No se pudo ejecutar 'ss'", "Instala iproute2 para analizar puertos.", "")
+		c.add("Ports", "info", "Could not run 'ss'", "Install iproute2 to analyze ports.", "")
 		return nil
 	}
 	merged := map[string]*PortInfo{}
@@ -69,14 +69,15 @@ func scanPorts(c *Collector) []PortInfo {
 	for _, k := range order {
 		p := merged[k]
 		if r, ok := riskyPorts[p.Port]; ok && p.Exposed && p.Proto == "tcp" {
-			p.Note = r.name + " expuesto a toda la red"
-			who := p.Process
-			if who == "" {
-				who = "proceso desconocido"
+			p.noteM = M("%s exposed to the whole network", r.name)
+			p.Note = p.noteM.Render("en")
+			who := Msg{Tpl: p.Process}
+			if p.Process == "" {
+				who = M("unknown process")
 			}
-			c.add("Puertos", r.sev, fmt.Sprintf("Puerto %d (%s) abierto a todas las interfaces", p.Port, r.name),
-				"Escucha en "+p.Addr+" — "+who,
-				fmt.Sprintf("Haz que escuche solo en 127.0.0.1 (bind-address) o bloquéalo con el firewall: ufw deny %d", p.Port))
+			c.add("Ports", r.sev, M("Port %d (%s) open on all interfaces", p.Port, r.name),
+				M("Listening on %s — %s", p.Addr, who),
+				M("Make it listen only on 127.0.0.1 (bind-address) or block it with the firewall: ufw deny %d", p.Port))
 		}
 		res = append(res, *p)
 	}
@@ -90,7 +91,7 @@ var svcCandidates = regexp.MustCompile(`^(nginx|apache2|httpd|mysql|mysqld|maria
 
 func checkServices(c *Collector, ports []PortInfo) {
 	if !sh.Have("systemctl") {
-		c.add("Servicios", "info", "systemd no disponible", "No se pueden revisar servicios con systemctl.", "")
+		c.add("Services", "info", "systemd not available", "Services cannot be checked without systemctl.", "")
 		return
 	}
 	out, _ := sh.Run(10*time.Second, "systemctl", "list-unit-files", "--no-legend", "--no-pager", "--type=service,timer")
@@ -126,11 +127,12 @@ func checkServices(c *Collector, ports []PortInfo) {
 		if s.Enabled != "enabled" && s.Active != "failed" {
 			continue
 		}
-		detail := ""
+		logs := ""
 		if jl, _ := sh.Run(6*time.Second, "journalctl", "-u", s.Name, "-n", "6", "--no-pager", "-o", "cat"); jl != "" {
-			detail = sh.Trunc(jl, 500)
+			logs = sh.Trunc(jl, 500)
 		}
-		// Conflicto de puertos típico entre servidores web.
+		var detail any = logs
+		// Typical port conflict between web servers.
 		if s.Name == "nginx" || s.Name == "apache2" || s.Name == "httpd" {
 			own := map[string]bool{s.Name: true}
 			if s.Name != "nginx" {
@@ -138,16 +140,16 @@ func checkServices(c *Collector, ports []PortInfo) {
 			}
 			for _, port := range []int{80, 443} {
 				if h := holder[port]; h != "" && !own[h] {
-					detail = fmt.Sprintf("CONFLICTO: el puerto %d está ocupado por «%s». ", port, h) + detail
+					detail = M("CONFLICT: port %d is held by \"%s\". %s", port, h, logs)
 					break
 				}
 			}
 		}
-		c.add("Servicios", "crit", fmt.Sprintf("Servicio %s caído (%s) pero habilitado", s.Name, s.Active), detail,
-			fmt.Sprintf("systemctl status %s  ·  journalctl -u %s -n 50  ·  systemctl restart %s", s.Name, s.Name, s.Name))
+		c.add("Services", "crit", M("Service %s is down (%s) but enabled", s.Name, s.Active), detail,
+			M("systemctl status %[1]s  ·  journalctl -u %[1]s -n 50  ·  systemctl restart %[1]s", s.Name))
 	}
 
-	// Otros servicios fallidos del sistema.
+	// Other failed systemd units.
 	if fl, _ := sh.Run(8*time.Second, "systemctl", "--failed", "--no-legend", "--no-pager", "--plain"); fl != "" {
 		for _, l := range strings.Split(fl, "\n") {
 			f := strings.Fields(l)
@@ -158,7 +160,7 @@ func checkServices(c *Collector, ports []PortInfo) {
 			if known[n] {
 				continue
 			}
-			c.add("Servicios", "warn", "Unidad systemd fallida: "+f[0], "", "systemctl status "+f[0]+" ; systemctl reset-failed "+f[0])
+			c.add("Services", "warn", M("Failed systemd unit: %s", f[0]), "", M("systemctl status %[1]s ; systemctl reset-failed %[1]s", f[0]))
 		}
 	}
 	c.mu.Lock()

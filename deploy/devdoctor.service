@@ -1,5 +1,5 @@
 [Unit]
-Description=DevDoctor - diagnóstico y dashboard del servidor
+Description=DevDoctor - server diagnostics and dashboard
 After=network-online.target
 Wants=network-online.target
 
@@ -8,7 +8,7 @@ Type=simple
 ExecStart=/usr/local/bin/devdoctor run --config /etc/devdoctor/config.json
 Restart=on-failure
 RestartSec=3
-# DevDoctor sólo LEE el sistema; se restringe todo lo posible.
+# DevDoctor only READS the system; restrict everything possible.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only

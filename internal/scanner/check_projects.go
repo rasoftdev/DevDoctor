@@ -1,7 +1,6 @@
 package scanner
 
 import (
-	"devdoctor/internal/sh"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"devdoctor/internal/sh"
 )
 
 type composerJSON struct {
@@ -54,7 +55,6 @@ func checkProjects(c *Collector, s *Scanner) {
 	if len(projects) == 0 {
 		return
 	}
-	// versiones instaladas
 	var phpV, nodeV ver
 	var phpOK, nodeOK bool
 	if v := detectVersion([]string{"php", "-v"}, `PHP (\d+\.\d+\.\d+)`); v != "" {
@@ -92,9 +92,9 @@ func checkProjects(c *Collector, s *Scanner) {
 
 func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, nodeV ver, nodeOK bool, phpMods map[string]bool) {
 	pi := ProjectInfo{Path: p, Vulns: map[string]int{}}
-	issue := func(sev, title, detail, fix string) {
+	issue := func(sev string, title Msg, detail, fix any) {
 		pi.Issues++
-		c.add("Dependencias", sev, title+" — "+p, detail, fix)
+		c.add("Dependencies", sev, M("%s — %s", title, p), detail, fix)
 	}
 	switch {
 	case sh.Exists(filepath.Join(p, "artisan")):
@@ -114,13 +114,14 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 	if b, err := os.ReadFile(filepath.Join(p, "composer.json")); err == nil {
 		var cj composerJSON
 		if json.Unmarshal(b, &cj) != nil {
-			issue("crit", "composer.json inválido (JSON mal formado)", "", "composer validate")
+			issue("crit", M("Invalid composer.json (malformed JSON)"), "", "composer validate")
 		} else {
 			if req := cj.Require["php"]; req != "" {
 				pi.PHPReq = req
 				if phpOK && !satisfies(req, phpV) {
-					issue("crit", fmt.Sprintf("Requiere PHP %s pero el servidor tiene %d.%d", req, phpV[0], phpV[1]),
-						"composer install fallará o la app dará errores en runtime.", "Instala la versión de PHP requerida o ajusta la constraint de 'php' tras probar compatibilidad.")
+					issue("crit", M("Requires PHP %s but the server has %d.%d", req, phpV[0], phpV[1]),
+						"composer install will fail or the app will break at runtime.",
+						"Install the required PHP version or adjust the 'php' constraint after testing compatibility.")
 				}
 			}
 			var missing []string
@@ -131,7 +132,7 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 			}
 			if len(missing) > 0 {
 				sort.Strings(missing)
-				issue("crit", "Extensiones PHP faltantes: "+strings.Join(missing, ", "), "",
+				issue("crit", M("Missing PHP extensions: %s", strings.Join(missing, ", ")), "",
 					"apt install "+strings.ReplaceAll(strings.Join(missing, " "), "ext-", "php-"))
 			}
 		}
@@ -139,18 +140,18 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 		li, lerr := os.Stat(lock)
 		switch {
 		case lerr != nil:
-			issue("warn", "Sin composer.lock (versiones no reproducibles)", "", "composer install  (y versiona el lock)")
+			issue("warn", M("No composer.lock (non-reproducible versions)"), "", "composer install  (and commit the lock file)")
 		default:
 			if ji, _ := os.Stat(filepath.Join(p, "composer.json")); ji != nil && ji.ModTime().After(li.ModTime().Add(time.Minute)) {
-				issue("warn", "composer.json es más nuevo que composer.lock", "El lock puede estar desactualizado.", "composer update --lock")
+				issue("warn", M("composer.json is newer than composer.lock"), "The lock file may be out of date.", "composer update --lock")
 			}
 			if !sh.Exists(filepath.Join(p, "vendor", "autoload.php")) {
-				issue("crit", "Dependencias PHP sin instalar (vendor/ ausente)", "", "composer install --no-dev --optimize-autoloader")
+				issue("crit", M("PHP dependencies not installed (vendor/ missing)"), "", "composer install --no-dev --optimize-autoloader")
 			} else if sh.Have("composer") {
 				if n, titles, ok := s.auditComposer(p, li); ok {
 					pi.Vulns["composer"] = n
 					if n > 0 {
-						issue("crit", fmt.Sprintf("%d vulnerabilidades conocidas en dependencias Composer", n), strings.Join(titles, "\n"), "composer audit  ·  composer update <paquete>")
+						issue("crit", M("%d known vulnerabilities in Composer dependencies", n), strings.Join(titles, "\n"), "composer audit  ·  composer update <package>")
 					}
 				}
 			}
@@ -161,21 +162,21 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 	if b, err := os.ReadFile(filepath.Join(p, "package.json")); err == nil {
 		var pj packageJSON
 		if json.Unmarshal(b, &pj) != nil {
-			issue("crit", "package.json inválido (JSON mal formado)", "", "")
+			issue("crit", M("Invalid package.json (malformed JSON)"), "", "")
 		} else if req := pj.Engines["node"]; req != "" {
 			pi.NodeReq = req
 			if nodeOK && !satisfies(req, nodeV) {
-				issue("crit", fmt.Sprintf("Requiere Node %s pero el servidor tiene %d.%d", req, nodeV[0], nodeV[1]), "", "Usa nvm/n para instalar la versión requerida.")
+				issue("crit", M("Requires Node %s but the server has %d.%d", req, nodeV[0], nodeV[1]), "", "Use nvm/n to install the required version.")
 			}
 		}
 		lock := filepath.Join(p, "package-lock.json")
 		li, lerr := os.Stat(lock)
 		hasLock := lerr == nil || sh.Exists(filepath.Join(p, "yarn.lock")) || sh.Exists(filepath.Join(p, "pnpm-lock.yaml"))
 		if !hasLock {
-			issue("info", "Sin lockfile de Node", "", "npm install  (y versiona package-lock.json)")
+			issue("info", M("No Node lockfile"), "", "npm install  (and commit package-lock.json)")
 		}
 		if hasLock && !sh.Exists(filepath.Join(p, "node_modules")) && !sh.Exists(filepath.Join(p, ".next")) && !sh.Exists(filepath.Join(p, "dist")) && !sh.Exists(filepath.Join(p, "build")) {
-			issue("warn", "node_modules ausente (dependencias sin instalar)", "", "npm ci")
+			issue("warn", M("node_modules missing (dependencies not installed)"), "", "npm ci")
 		}
 		if lerr == nil && sh.Have("npm") {
 			if v, ok := s.auditNPM(p, li); ok {
@@ -185,9 +186,10 @@ func analyzeProject(c *Collector, s *Scanner, p string, phpV ver, phpOK bool, no
 				tot := v["critical"] + v["high"] + v["moderate"] + v["low"]
 				pi.Vulns["npm"] = tot
 				if v["critical"]+v["high"] > 0 {
-					issue("crit", fmt.Sprintf("npm audit: %d críticas, %d altas, %d moderadas", v["critical"], v["high"], v["moderate"]), "", "npm audit fix  ·  revisa cambios mayores con npm audit fix --force (con cuidado)")
+					issue("crit", M("npm audit: %d critical, %d high, %d moderate", v["critical"], v["high"], v["moderate"]), "",
+						"npm audit fix  ·  review breaking changes before npm audit fix --force")
 				} else if tot > 0 {
-					issue("warn", fmt.Sprintf("npm audit: %d moderadas, %d bajas", v["moderate"], v["low"]), "", "npm audit fix")
+					issue("warn", M("npm audit: %d moderate, %d low", v["moderate"], v["low"]), "", "npm audit fix")
 				}
 			}
 		}

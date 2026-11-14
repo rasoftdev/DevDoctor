@@ -1,14 +1,14 @@
 package scanner
 
 import (
-	"devdoctor/internal/sh"
-	"devdoctor/internal/sysinfo"
 	"fmt"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"devdoctor/internal/sh"
 )
 
 func checkSecurity(c *Collector) {
@@ -35,13 +35,15 @@ func checkSecurity(c *Collector) {
 	}
 	if len(sshCfg) > 0 {
 		if sshCfg["permitrootlogin"] == "yes" {
-			c.add("Seguridad", "crit", "SSH permite login directo como root con contraseña", "", "PermitRootLogin prohibit-password  (en /etc/ssh/sshd_config) y systemctl reload ssh")
+			c.add("Security", "crit", "SSH allows direct root login with a password", "",
+				"PermitRootLogin prohibit-password  (in /etc/ssh/sshd_config) and systemctl reload ssh")
 		}
 		if sshCfg["permitemptypasswords"] == "yes" {
-			c.add("Seguridad", "crit", "SSH permite contraseñas vacías", "", "PermitEmptyPasswords no")
+			c.add("Security", "crit", "SSH allows empty passwords", "", "PermitEmptyPasswords no")
 		}
 		if sshCfg["passwordauthentication"] == "yes" {
-			c.add("Seguridad", "warn", "SSH acepta autenticación por contraseña", "Expuesto a fuerza bruta.", "Usa claves SSH y PasswordAuthentication no (tras verificar que puedes entrar con tu clave).")
+			c.add("Security", "warn", "SSH accepts password authentication", "Exposed to brute force.",
+				"Use SSH keys and PasswordAuthentication no (after verifying you can log in with your key).")
 		}
 	}
 
@@ -68,15 +70,17 @@ func checkSecurity(c *Collector) {
 		}
 	}
 	if !fw {
-		c.add("Seguridad", "warn", "No se detecta un firewall activo", "Todos los puertos en escucha son alcanzables desde la red.", "ufw default deny incoming && ufw allow 22 && ufw allow 80,443/tcp && ufw enable")
+		c.add("Security", "warn", "No active firewall detected", "Every listening port is reachable from the network.",
+			"ufw default deny incoming && ufw allow 22 && ufw allow 80,443/tcp && ufw enable")
 	}
 
 	// --- fail2ban ---
 	if out, _ := sh.Run(4*time.Second, "systemctl", "is-active", "fail2ban"); strings.TrimSpace(out) != "active" {
-		c.add("Seguridad", "info", "fail2ban no está activo", "Bloquea IPs con intentos repetidos de login.", "apt install fail2ban && systemctl enable --now fail2ban")
+		c.add("Security", "info", "fail2ban is not active", "It blocks IPs with repeated failed logins.",
+			"apt install fail2ban && systemctl enable --now fail2ban")
 	}
 
-	// --- Actualizaciones pendientes ---
+	// --- Pending updates ---
 	if sh.Have("apt-get") {
 		out, _ := sh.Run(40*time.Second, "apt-get", "-s", "-o", "Debug::NoLocking=1", "upgrade")
 		total, sec := 0, 0
@@ -94,12 +98,13 @@ func checkSecurity(c *Collector) {
 		}
 		switch {
 		case sec > 0:
-			c.add("Seguridad", "crit", fmt.Sprintf("%d actualizaciones de SEGURIDAD pendientes (%d en total)", sec, total), strings.Join(secPk, ", "), "apt update && apt upgrade")
+			c.add("Security", "crit", M("%d pending SECURITY updates (%d in total)", sec, total), strings.Join(secPk, ", "), "apt update && apt upgrade")
 		case total > 0:
-			c.add("Seguridad", "info", fmt.Sprintf("%d paquetes con actualización disponible", total), "", "apt update && apt upgrade")
+			c.add("Security", "info", M("%d packages have updates available", total), "", "apt update && apt upgrade")
 		}
 		if fi, err := os.Stat("/var/lib/apt/periodic/update-success-stamp"); err == nil && time.Since(fi.ModTime()) > 10*24*time.Hour {
-			c.add("Seguridad", "info", "La lista de paquetes apt no se actualiza hace más de 10 días", "Los datos de vulnerabilidades pendientes pueden estar desactualizados.", "apt update")
+			c.add("Security", "info", "The apt package list has not been refreshed for over 10 days",
+				"Pending-vulnerability data may be out of date.", "apt update")
 		}
 	} else if sh.Have("dnf") {
 		out, err := sh.Run(60*time.Second, "dnf", "-q", "check-update", "--security")
@@ -111,37 +116,37 @@ func checkSecurity(c *Collector) {
 				}
 			}
 			if n > 0 {
-				c.add("Seguridad", "crit", fmt.Sprintf("%d actualizaciones de seguridad pendientes", n), "", "dnf upgrade --security")
+				c.add("Security", "crit", M("%d pending security updates", n), "", "dnf upgrade --security")
 			}
 		}
 	}
 	if sh.Exists("/var/run/reboot-required") {
 		pk := strings.TrimSpace(sh.ReadFile("/var/run/reboot-required.pkgs"))
-		c.add("Seguridad", "warn", "El servidor necesita reiniciarse (actualización de kernel/librerías)", pk, "Programa un reinicio: reboot")
+		c.add("Security", "warn", "The server needs a reboot (kernel/library update)", pk, "Schedule a reboot: reboot")
 	}
 
-	// --- Cuentas ---
+	// --- Accounts ---
 	for _, l := range strings.Split(sh.ReadFile("/etc/passwd"), "\n") {
 		f := strings.Split(l, ":")
 		if len(f) > 3 && f[2] == "0" && f[0] != "root" {
-			c.add("Seguridad", "crit", "Usuario «"+f[0]+"» con UID 0 (equivale a root)", "", "Revisa /etc/passwd; elimina o corrige la cuenta.")
+			c.add("Security", "crit", M("User \"%s\" has UID 0 (equivalent to root)", f[0]), "", "Review /etc/passwd; remove or fix the account.")
 		}
 	}
 	for _, l := range strings.Split(sh.ReadFile("/etc/shadow"), "\n") {
 		f := strings.Split(l, ":")
 		if len(f) > 1 && f[0] != "" && f[1] == "" {
-			c.add("Seguridad", "crit", "Cuenta «"+f[0]+"» sin contraseña", "", "passwd -l "+f[0])
+			c.add("Security", "crit", M("Account \"%s\" has no password", f[0]), "", "passwd -l "+f[0])
 		}
 	}
 
-	// --- Hora ---
+	// --- Clock ---
 	if sh.Have("timedatectl") {
 		if out, _ := sh.Run(4*time.Second, "timedatectl", "show", "-p", "NTPSynchronized", "--value"); strings.TrimSpace(out) == "no" {
-			c.add("Seguridad", "info", "Reloj no sincronizado por NTP", "Puede romper certificados, tokens y logs.", "timedatectl set-ntp true")
+			c.add("Security", "info", "Clock is not synchronized via NTP", "It can break certificates, tokens and logs.", "timedatectl set-ntp true")
 		}
 	}
 
-	// --- Intentos de intrusión SSH (24 h) ---
+	// --- SSH intrusion attempts (24 h) ---
 	sshAttackers(c)
 }
 
@@ -178,9 +183,10 @@ func sshAttackers(c *Collector) {
 	c.R.Attackers = at
 	c.mu.Unlock()
 	if total >= 200 {
-		c.add("Seguridad", "warn", fmt.Sprintf("%d intentos fallidos de login SSH recientes desde %d IPs", total, len(counts)), "Ataque de fuerza bruta en curso o histórico reciente.", "Instala fail2ban, usa claves SSH o cambia el puerto/restringe por firewall.")
+		c.add("Security", "warn", M("%d recent failed SSH logins from %d IPs", total, len(counts)),
+			"A brute-force attack is ongoing or happened recently.", "Install fail2ban, use SSH keys, or restrict the port/IPs with the firewall.")
 	} else if total >= 30 {
-		c.add("Seguridad", "info", fmt.Sprintf("%d intentos fallidos de login SSH recientes", total), "", "Considera fail2ban.")
+		c.add("Security", "info", M("%d recent failed SSH logins", total), "", "Consider fail2ban.")
 	}
 }
 
@@ -198,50 +204,54 @@ func tailFile(p string, max int64) string {
 	return string(b[:n])
 }
 
-// ---------------- Recursos ----------------
+// ---------------- Resources ----------------
 
 func checkResources(c *Collector) {
-	// espera breve a que el sampler tenga datos de disco
-	var sn sysinfo.Snapshot
-	for i := 0; i < 5; i++ {
-		sn = c.sam.Get()
-		if len(sn.Disks) > 0 || i == 4 {
-			break
-		}
+	// brief wait for the sampler to have disk data
+	var sn = c.sam.Get()
+	for i := 0; i < 5 && len(sn.Disks) == 0; i++ {
 		time.Sleep(500 * time.Millisecond)
+		sn = c.sam.Get()
 	}
 	for _, d := range sn.Disks {
 		switch {
 		case d.Pct >= 95:
-			c.add("Recursos", "crit", fmt.Sprintf("Disco %s al %.0f%%", d.Mount, d.Pct), d.FS, "du -xh "+d.Mount+" --max-depth=2 | sort -h | tail -20  ·  journalctl --vacuum-size=200M  ·  apt clean")
+			c.add("Resources", "crit", M("Disk %s at %.0f%%", d.Mount, d.Pct), d.FS,
+				"du -xh "+d.Mount+" --max-depth=2 | sort -h | tail -20  ·  journalctl --vacuum-size=200M  ·  apt clean")
 		case d.Pct >= 85:
-			c.add("Recursos", "warn", fmt.Sprintf("Disco %s al %.0f%%", d.Mount, d.Pct), d.FS, "du -xh "+d.Mount+" --max-depth=2 | sort -h | tail -20")
+			c.add("Resources", "warn", M("Disk %s at %.0f%%", d.Mount, d.Pct), d.FS, "du -xh "+d.Mount+" --max-depth=2 | sort -h | tail -20")
 		}
 		if d.InodePct >= 90 {
-			c.add("Recursos", "crit", fmt.Sprintf("Inodos agotándose en %s (%.0f%%)", d.Mount, d.InodePct), "Habrá errores «No space left» aunque haya espacio libre.", "Busca directorios con millones de archivos pequeños (sesiones, caché, mail).")
+			c.add("Resources", "crit", M("Inodes running out on %s (%.0f%%)", d.Mount, d.InodePct),
+				"You will get \"No space left\" errors even with free space.", "Look for directories with millions of small files (sessions, cache, mail).")
 		}
 	}
 	if sn.MemTotal > 0 {
 		if p := float64(sn.MemUsed) / float64(sn.MemTotal) * 100; p >= 92 {
-			c.add("Recursos", "crit", fmt.Sprintf("Memoria RAM al %.0f%%", p), "", "Revisa los procesos con ps aux --sort=-%mem | head ; considera más RAM o ajustar workers de PHP-FPM/Node.")
+			c.add("Resources", "crit", M("RAM at %.0f%%", p), "",
+				"ps aux --sort=-%mem | head ; consider more RAM or tune PHP-FPM/Node workers.")
 		} else if p >= 85 {
-			c.add("Recursos", "warn", fmt.Sprintf("Memoria RAM al %.0f%%", p), "", "ps aux --sort=-%mem | head")
+			c.add("Resources", "warn", M("RAM at %.0f%%", p), "", "ps aux --sort=-%mem | head")
 		}
 	}
 	if sn.SwapTotal == 0 && sn.MemTotal > 0 && sn.MemTotal < 4<<30 {
-		c.add("Recursos", "info", "Sin swap en un servidor con poca RAM", "Un pico de memoria puede disparar el OOM killer.", "fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile")
+		c.add("Resources", "info", "No swap on a low-RAM server", "A memory spike can trigger the OOM killer.",
+			"fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile")
 	} else if sn.SwapTotal > 0 && float64(sn.SwapUsed)/float64(sn.SwapTotal) > 0.5 {
-		c.add("Recursos", "warn", fmt.Sprintf("Swap en uso al %.0f%%", float64(sn.SwapUsed)/float64(sn.SwapTotal)*100), "El sistema está presionado por memoria.", "")
+		c.add("Resources", "warn", M("Swap usage at %.0f%%", float64(sn.SwapUsed)/float64(sn.SwapTotal)*100), "The system is under memory pressure.", "")
 	}
 	if sn.Cores > 0 && sn.Load[1] > float64(sn.Cores)*1.5 {
-		c.add("Recursos", "warn", fmt.Sprintf("Carga alta: load15 %.2f con %d núcleos", sn.Load[2], sn.Cores), "", "top / htop para identificar el proceso.")
+		c.add("Resources", "warn", M("High load: load15 %.2f on %d cores", sn.Load[2], sn.Cores), "", "top / htop to find the culprit process.")
 	}
 	if sn.Zombies > 5 {
-		c.add("Recursos", "info", fmt.Sprintf("%d procesos zombie", sn.Zombies), "", "Reinicia el proceso padre que no recoge a sus hijos.")
+		c.add("Resources", "info", M("%d zombie processes", sn.Zombies), "", "Restart the parent process that is not reaping its children.")
 	}
 	if out, _ := sh.Run(10*time.Second, "journalctl", "-k", "--since", "7 days ago", "--no-pager", "-o", "cat"); out != "" {
 		if n := strings.Count(out, "Out of memory: Killed process"); n > 0 {
-			c.add("Recursos", "crit", fmt.Sprintf("El OOM killer mató procesos %d veces esta semana", n), "El kernel se quedó sin memoria.", "Añade RAM/swap y limita workers (php-fpm pm.max_children, Node --max-old-space-size).")
+			c.add("Resources", "crit", M("The OOM killer terminated processes %d times this week", n), "The kernel ran out of memory.",
+				"Add RAM/swap and limit workers (php-fpm pm.max_children, Node --max-old-space-size).")
 		}
 	}
 }
+
+var _ = fmt.Sprintf

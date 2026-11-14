@@ -1,213 +1,503 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DevDoctor</title>
+<link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
-:root{--bg:#0d1117;--panel:#161b22;--panel2:#1c232c;--line:#2a323d;--text:#e6edf3;--mut:#8b96a3;--acc:#3fb8af;
---crit:#f85149;--warn:#e3a008;--info:#58a6ff;--ok:#3fb950;--r:10px}
-@media (prefers-color-scheme:light){:root{--bg:#f4f6f8;--panel:#fff;--panel2:#f0f3f6;--line:#d8dee4;--text:#1f2328;--mut:#5b6670;--acc:#0f8b84;--crit:#cf222e;--warn:#9a6700;--info:#0969da;--ok:#1a7f37}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
-button{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
-button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-color:var(--acc);color:#04201e;font-weight:600}
-input{font:inherit;width:100%;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
-input:focus{outline:2px solid var(--acc);outline-offset:-1px}
+:root{--bg:#0b0f14;--panel:#121820;--panel2:#18202a;--line:#243040;--text:#e8eef5;--mut:#8d9aab;--acc:#3fb8af;--acc-ink:#04201e;
+--crit:#ff5d5d;--warn:#f0a91c;--info:#4da3ff;--ok:#3ecf6e;--r:14px;--shadow:0 1px 0 #ffffff08 inset,0 8px 24px #00000040}
+@media (prefers-color-scheme:light){:root{--bg:#f3f5f8;--panel:#fff;--panel2:#f0f3f7;--line:#dde3ea;--text:#18212b;--mut:#5d6b7a;--acc:#0e8a82;--acc-ink:#fff;
+--crit:#d92d3a;--warn:#b57600;--info:#1a64d6;--ok:#1b8a46;--shadow:0 1px 2px #1b2a3a14,0 6px 18px #1b2a3a10}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
 .hidden{display:none!important}
-#login,#setup{min-height:100vh;display:grid;place-items:center;padding:16px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
-#setup{padding:16px}
-#login .card{width:100%;max-width:360px;display:grid;gap:12px}
-h1{font-size:20px;margin:0}h2{font-size:13px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-.err{color:var(--crit);min-height:1.2em;font-size:13px}
-header{display:flex;gap:12px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;position:sticky;top:0;background:var(--bg);z-index:5}
-header .sp{flex:1}.brand{font-weight:700;font-size:17px}.brand b{color:var(--acc)}
-main{padding:20px;max-width:1280px;margin:0 auto;display:grid;gap:16px}
-.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
-.kpi .v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}.kpi .s{color:var(--mut);font-size:12px}
-.spark{width:100%;height:42px;margin-top:6px;display:block}
-.score{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
-.ring{width:96px;height:96px}.ring text{fill:var(--text);font-weight:700;font-size:24px}
-.pills{display:flex;gap:8px;flex-wrap:wrap}
-.pill{padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid currentColor}
-.crit{color:var(--crit)}.warn{color:var(--warn)}.info{color:var(--info)}.ok{color:var(--ok)}
-.bar{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
-.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--mut);padding:9px 14px;white-space:nowrap}
-.tabs button.on{color:var(--text);border-color:var(--acc)}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--mut);font-weight:600;font-size:12px}tr:last-child td{border:0}
-.tw{overflow-x:auto}
-.f{border:1px solid var(--line);border-left:4px solid currentColor;border-radius:8px;padding:10px 14px;margin-bottom:8px;background:var(--panel)}
-.f .t{color:var(--text);font-weight:600}.f .m{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-.f pre{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--mut);font-size:12.5px}
-.f .fix{margin-top:6px;color:var(--text);background:var(--panel2);border-radius:6px;padding:6px 9px}
-.filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.filters button.on{border-color:var(--acc);color:var(--acc)}
-dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:var(--r);padding:20px;width:min(400px,92vw)}
-dialog::backdrop{background:#0008}dialog form{display:grid;gap:10px}
-.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.i.sm{width:15px;height:15px}
+
+/* controls */
+button{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:border-color .15s,background .15s}
+button:hover{border-color:var(--acc)}
+button:disabled{opacity:.6;cursor:progress}
+button.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600}
+button.ghost{background:transparent}
+label{display:grid;gap:7px;font-size:13px;font-weight:600}
+input{font:inherit;font-weight:400;width:100%;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.pw{position:relative}.pw input{padding-right:44px}
+.pw .eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);padding:7px;border:0;background:transparent;color:var(--mut);border-radius:8px}
+.pw .eye:hover{color:var(--text)}
+.err{color:var(--crit);min-height:1.3em;font-size:13px}
+.lang{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.lang button{border:0;border-radius:0;background:transparent;padding:7px 11px;font-size:12px;font-weight:700;color:var(--mut)}
+.lang button.on{background:var(--acc);color:var(--acc-ink)}
+
+/* layout */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--shadow)}
+h2{font-size:12px;margin:0 0 14px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;font-weight:700;display:flex;align-items:center;gap:8px}
+.auth{min-height:100vh;display:grid;place-items:center;padding:16px;position:relative}
+.auth .card{width:100%;max-width:400px;display:grid;gap:16px;padding:26px}
+.auth .tl{position:absolute;top:16px;right:16px}
+.brand{font-weight:800;font-size:18px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+.brand b{color:var(--acc)}
+.logo-img{width:min(230px,70%);height:auto;display:block;margin:0 auto -4px}
+.nav-ico{width:36px;height:36px;display:block}
+header{display:flex;gap:10px;align-items:center;padding:12px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);z-index:5}
+header .sp{flex:1}
+main{padding:22px 24px 48px;max-width:1320px;margin:0 auto;display:grid;gap:16px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));align-items:start}
 .muted{color:var(--mut)}
-@media(max-width:600px){main{padding:12px}header{padding:10px 12px}}
+
+/* health card */
+.health{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+.ring{width:112px;height:112px;flex:none}.ring text{fill:var(--text);font-weight:800;font-size:26px}
+.health .body{flex:1;min-width:260px;display:grid;gap:12px}
+.health h1{font-size:18px;margin:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tag{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);font-size:12.5px;color:var(--text)}
+.tag svg{color:var(--mut)}
+.tag.mono{font-size:12px}
+
+/* pulsing dots (replace colored borders) */
+.dot{--c:var(--mut);width:9px;height:9px;border-radius:50%;background:var(--c);position:relative;flex:none;display:inline-block}
+.dot::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--c);animation:pulse 1.8s ease-out infinite}
+.dot.crit{--c:var(--crit)}.dot.crit::after{animation-duration:1.2s}
+.dot.warn{--c:var(--warn)}.dot.warn::after{animation-duration:1.9s}
+.dot.info{--c:var(--info)}.dot.info::after{animation-duration:2.8s}
+.dot.ok{--c:var(--ok)}.dot.ok::after{animation:none}
+.dot.mut::after{animation:none}
+@keyframes pulse{0%{transform:scale(1);opacity:.55}100%{transform:scale(3);opacity:0}}
+@media (prefers-reduced-motion:reduce){.dot::after{animation:none!important}}
+.crit{color:var(--crit)}.warn{color:var(--warn)}.info{color:var(--info)}.ok{color:var(--ok)}
+.pill{display:inline-flex;align-items:center;gap:9px;padding:5px 12px;border-radius:99px;font-size:12.5px;font-weight:700;background:color-mix(in srgb,currentColor 10%,transparent)}
+.pill .dot{width:8px;height:8px}
+
+/* KPI */
+.kpi{display:grid;gap:4px;align-content:start}
+.kpi .hd{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em}
+.kpi .v{font-size:clamp(20px,2vw,27px);font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi .s{color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stats{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:12px;color:var(--mut)}
+.stats b{color:var(--text);font-variant-numeric:tabular-nums;font-weight:700}
+.meters1{display:grid;gap:10px;margin:8px 0 4px}
+.kpi .s{white-space:normal}
+.spark{width:100%;height:44px;margin-top:6px;display:block}
+
+/* disks */
+.disks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.disk{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;justify-items:center;gap:8px;text-align:center}
+.disk svg{width:76px;height:76px}.disk text{fill:var(--text);font-weight:800;font-size:19px}
+.disk .m{font-weight:700;word-break:break-all}.disk .u{font-size:12px;color:var(--mut)}
+
+/* processes */
+.procs{display:grid;gap:8px}
+.proc{display:grid;grid-template-columns:38px 1fr;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
+.av{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-weight:800;color:#fff;font-size:15px}
+.proc .nm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
+.proc .nm b{font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.proc .mini{font-size:11px;color:var(--mut);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:0 6px}
+.meters{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px}
+.meter{display:grid;gap:3px;font-size:11.5px;color:var(--mut)}
+.meter .t{display:flex;justify-content:space-between}.meter .t b{color:var(--text);font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--bg);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;border-radius:4px;transition:width .5s}
+
+/* tabs */
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:16px}
+.tabs button{border-radius:10px;background:transparent;border-color:transparent;color:var(--mut);white-space:nowrap}
+.tabs button:hover{color:var(--text);background:var(--panel2)}
+.tabs button.on{background:var(--panel2);border-color:var(--line);color:var(--text)}
+.tabs .n{font-size:11px;font-weight:800;padding:1px 7px;border-radius:99px;background:var(--bg);color:var(--mut)}
+.tabs .n.crit{background:color-mix(in srgb,var(--crit) 18%,transparent);color:var(--crit)}
+.tabs .n.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.filters button{padding:5px 12px;border-radius:99px;font-size:12.5px}.filters button.on{border-color:var(--acc);color:var(--acc)}
+
+/* findings */
+.fl{display:grid;gap:10px}
+.f{display:grid;grid-template-columns:42px 1fr;gap:14px;padding:14px 16px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
+.f .ic{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:var(--bg);color:var(--mut);border:1px solid var(--line)}
+.f .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.f .t{font-weight:650;flex:1;min-width:200px}
+.f .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px}
+.cat{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.sev{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.f pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--mut);font-size:12.5px;font-family:inherit}
+.fix{margin-top:10px;display:flex;gap:10px;align-items:flex-start;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 12px}
+.fix code{flex:1;word-break:break-word;white-space:pre-wrap;padding-top:3px}
+.fix button{padding:5px 8px;font-size:12px}
+.empty{display:grid;justify-items:center;gap:8px;padding:34px;color:var(--mut)}
+.empty svg{width:34px;height:34px;color:var(--ok)}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);font-weight:700;text-align:left;padding:11px 14px;background:var(--panel2);white-space:nowrap}
+td{padding:11px 14px;border-top:1px solid var(--line);vertical-align:middle}
+tbody tr:hover td{background:color-mix(in srgb,var(--panel2) 60%,transparent)}
+.st{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.gap{height:14px}
+.atk{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-bottom:14px}
+.atk div{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px}
+
+.scan-ov{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;background:color-mix(in srgb,var(--bg) 58%,transparent);backdrop-filter:blur(14px) saturate(125%);-webkit-backdrop-filter:blur(14px) saturate(125%);opacity:0;visibility:hidden;transition:opacity .28s ease,visibility .28s}
+.scan-ov.on{opacity:1;visibility:visible}
+.scan-box{display:grid;justify-items:center;gap:14px;text-align:center;max-width:420px}
+.scan-logo{width:min(250px,62vw);height:auto;animation:scanfloat 2.4s ease-in-out infinite;filter:drop-shadow(0 12px 34px color-mix(in srgb,var(--acc) 45%,transparent))}
+.scan-t{font-size:24px;font-weight:800;letter-spacing:-.02em}
+.scan-h{color:var(--mut);font-size:13.5px}
+.scan-bar{width:min(300px,72vw);height:5px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:4px}
+.scan-bar i{display:block;width:42%;height:100%;background:linear-gradient(90deg,transparent,var(--acc),transparent);border-radius:4px;animation:scanslide 1.3s ease-in-out infinite}
+.scan-s{font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums}
+@keyframes scanfloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-9px) scale(1.035)}}
+@keyframes scanslide{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
+@media (prefers-reduced-motion:reduce){.scan-logo,.scan-bar i{animation:none}}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:var(--r);padding:24px;width:min(420px,92vw);box-shadow:var(--shadow)}
+dialog::backdrop{background:#000a;backdrop-filter:blur(3px)}
+dialog form{display:grid;gap:14px}
+@media(max-width:640px){main{padding:14px}header{padding:10px 14px}header .lbl{display:none}.two{grid-template-columns:1fr}.meters{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 
-<div id="login" class="hidden">
-  <form class="card" id="lf">
-    <div class="brand" style="font-size:22px">Dev<b>Doctor</b></div>
-    <div class="muted">Inicia sesión para ver el estado del servidor.</div>
-    <label>Usuario<input id="lu" autocomplete="username" required autofocus></label>
-    <label>Contraseña<input id="lp" type="password" autocomplete="current-password" required></label>
-    <div class="err" id="le"></div>
-    <button class="pri">Entrar</button>
-  </form>
-</div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+<symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></symbol>
+<symbol id="i-mem" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M7 11v2M11 11v2M15 11v2M6 17v3M10 17v3M14 17v3M18 17v3"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v14M6 12l6 6 6-6"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6"/></symbol>
+<symbol id="i-net" viewBox="0 0 24 24"><path d="M7 4v14M3 14l4 4 4-4M17 20V6M13 10l4-4 4 4"/></symbol>
+<symbol id="i-act" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-disk" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18M7 17.5h.01"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+<symbol id="i-pkg" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M7 9V5h4v4M13 9V5h4v4M7 14h.01M11 14h.01M15 14h.01"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1116 0"/><path d="M12 18l4-6"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.8 9.8 0 0112 6c6 0 10 6 10 6a17 17 0 01-3.2 3.9M6.6 6.7C3.7 8.5 2 12 2 12s4 7 10 7c1.5 0 2.9-.4 4.1-1"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></symbol>
+<symbol id="i-okc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
+<symbol id="i-scan" viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 4v5h-5"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></symbol>
+<symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></symbol>
+<symbol id="i-term" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/></symbol>
+</defs>
+</svg>
 
-<div id="setup" class="hidden">
-  <form class="card" id="sf" style="width:100%;max-width:400px;display:grid;gap:12px;margin:auto">
-    <div class="brand" style="font-size:22px">Dev<b>Doctor</b></div>
-    <div><b>Configuración inicial</b><div class="muted">Crea tu usuario y contraseña. El código de configuración se mostró en la terminal al instalar (o ejecuta <code>sudo devdoctor setup-code</code>).</div></div>
-    <label>Código de configuración<input id="st" autocomplete="off" required></label>
-    <label>Usuario<input id="su" autocomplete="username" minlength="3" required></label>
-    <label>Contraseña (mín. 10 caracteres)<input id="sp" type="password" autocomplete="new-password" minlength="10" required></label>
-    <label>Repite la contraseña<input id="sr" type="password" autocomplete="new-password" required></label>
+<!-- SETUP (first run) -->
+<div id="setup" class="auth hidden">
+  <div class="tl"><div class="lang" data-lang></div></div>
+  <form class="card" id="sf">
+    <img class="logo-img" src="/logo.png" alt="DevDoctor">
+    <div><b data-i18n="setupTitle"></b><div class="muted" data-i18n-html="setupHelp"></div></div>
+    <label><span data-i18n="setupCode"></span><input id="st" autocomplete="off" required></label>
+    <label><span data-i18n="username"></span><input id="su" autocomplete="username" minlength="3" required></label>
+    <label><span data-i18n="newPassMin"></span><input id="sp" type="password" autocomplete="new-password" minlength="10" required></label>
+    <label><span data-i18n="repeatPass"></span><input id="sr" type="password" autocomplete="new-password" required></label>
     <div class="err" id="se"></div>
-    <button class="pri">Crear cuenta y entrar</button>
+    <button class="pri" style="justify-content:center" data-i18n="createAccount"></button>
   </form>
 </div>
 
+<!-- LOGIN -->
+<div id="login" class="auth hidden">
+  <div class="tl"><div class="lang" data-lang></div></div>
+  <form class="card" id="lf">
+    <img class="logo-img" src="/logo.png" alt="DevDoctor">
+    <div class="muted" style="text-align:center" data-i18n="loginHelp"></div>
+    <label><span data-i18n="username"></span><input id="lu" autocomplete="username" required></label>
+    <label><span data-i18n="password"></span><input id="lp" type="password" autocomplete="current-password" required></label>
+    <div class="err" id="le"></div>
+    <button class="pri" style="justify-content:center" data-i18n="signIn"></button>
+  </form>
+</div>
+
+<!-- APP -->
 <div id="app" class="hidden">
   <header>
-    <div class="brand">Dev<b>Doctor</b></div>
-    <div class="muted mono" id="hostline"></div>
+    <div class="brand"><img class="nav-ico" src="/favicon.png" alt=""><span>Dev<b>Doctor</b></span></div>
     <div class="sp"></div>
-    <button id="scanBtn" class="pri">Escanear ahora</button>
-    <button id="acctBtn">Cuenta</button>
-    <button id="outBtn">Salir</button>
+    <div class="lang" data-lang></div>
+    <button id="scanBtn" class="pri"><svg class="i sm"><use href="#i-scan"/></svg><span class="lbl" id="scanLbl"></span></button>
+    <button id="acctBtn" class="ghost"><svg class="i sm"><use href="#i-user"/></svg><span class="lbl" data-i18n="account"></span></button>
+    <button id="outBtn" class="ghost"><svg class="i sm"><use href="#i-out"/></svg><span class="lbl" data-i18n="signOut"></span></button>
   </header>
   <main>
-    <section class="card score">
+    <section class="card health">
       <svg class="ring" viewBox="0 0 100 100" id="ring"></svg>
-      <div style="flex:1;min-width:220px">
-        <h2 style="margin-bottom:4px">Salud del servidor</h2>
-        <div id="scoreTxt" class="muted">Ejecutando primer diagnóstico…</div>
-        <div class="pills" id="pills" style="margin-top:8px"></div>
+      <div class="body">
+        <div>
+          <h1 data-i18n="healthTitle"></h1>
+          <div id="scoreTxt" class="muted"></div>
+        </div>
+        <div class="row" id="pills"></div>
+        <div class="row" id="sysTags"></div>
       </div>
     </section>
 
     <section class="grid" id="kpis"></section>
 
     <section class="two">
-      <div class="card"><h2>Discos</h2><div id="disks"></div></div>
-      <div class="card"><h2>Procesos con más CPU</h2><div class="tw"><table id="procs"></table></div></div>
+      <div class="card"><h2><svg class="i sm"><use href="#i-disk"/></svg><span data-i18n="disks"></span></h2><div class="disks" id="disks"></div></div>
+      <div class="card"><h2><svg class="i sm"><use href="#i-cpu"/></svg><span data-i18n="topProcs"></span></h2><div class="procs" id="procs"></div></div>
     </section>
 
     <section class="card">
       <div class="tabs" id="tabs"></div>
-      <div id="tabBody" style="padding-top:14px"></div>
+      <div id="tabBody"></div>
     </section>
   </main>
 </div>
 
+<div id="scanOv" class="scan-ov" role="status" aria-live="polite" aria-hidden="true">
+  <div class="scan-box">
+    <img class="scan-logo" src="/logo.png" alt="">
+    <div class="scan-t" id="scanT"></div>
+    <div class="scan-h" id="scanH"></div>
+    <div class="scan-bar"><i></i></div>
+    <div class="scan-s" id="scanS"></div>
+  </div>
+</div>
+
 <dialog id="acct">
   <form id="af">
-    <h1 style="font-size:17px">Cuenta</h1>
-    <label>Nuevo usuario (opcional)<input id="au" autocomplete="username"></label>
-    <label>Nueva contraseña (mín. 10)<input id="an" type="password" autocomplete="new-password"></label>
-    <label>Contraseña actual<input id="ac" type="password" autocomplete="current-password" required></label>
+    <div class="brand" style="font-size:16px"><svg class="i"><use href="#i-user"/></svg><span data-i18n="account"></span></div>
+    <label><span data-i18n="newUser"></span><input id="au" autocomplete="username"></label>
+    <label><span data-i18n="newPassOpt"></span><input id="an" type="password" autocomplete="new-password"></label>
+    <label><span data-i18n="currentPass"></span><input id="ac" type="password" autocomplete="current-password" required></label>
     <div class="err" id="ae"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="ax">Cancelar</button><button class="pri">Guardar</button></div>
+    <div class="row" style="justify-content:flex-end"><button type="button" id="ax" data-i18n="cancel"></button><button class="pri" data-i18n="save"></button></div>
   </form>
 </dialog>
 
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ic=(n,c='')=>`<svg class="i ${c}"><use href="#i-${n}"/></svg>`;
+
+/* ---------------- i18n ---------------- */
+const T={
+en:{setupTitle:'Initial setup',setupHelp:'Create your username and password. The setup code was printed in the terminal during installation (or run <code>sudo devdoctor setup-code</code>).',
+ setupCode:'Setup code',username:'Username',password:'Password',newPassMin:'Password (min. 10 characters)',repeatPass:'Repeat the password',createAccount:'Create account and sign in',
+ loginHelp:'Sign in to see your server status.',signIn:'Sign in',account:'Account',signOut:'Sign out',scanNow:'Scan now',scanning:'Scanning...',scanHint:'Checking ports, services, SSL, permissions, dependencies and containers',
+ healthTitle:'Server health',noScanYet:'Running the first diagnosis...',lastScan:'Last diagnosis',critical:'critical',warning:'warnings',infoN:'info',
+ disks:'Disks',topProcs:'Top processes by CPU',newUser:'New username (optional)',newPassOpt:'New password (optional, min. 10)',currentPass:'Current password',cancel:'Cancel',save:'Save',
+ passMismatch:'The passwords do not match',acctUpdated:'Account updated. Please sign in again.',showPass:'Show password',hidePass:'Hide password',copy:'Copy',copied:'Copied',
+ cpu:'CPU',memory:'Memory',network:'Network',load:'Load (1/5/15)',uptime:'Uptime',cores:'cores',of:'of',noSwap:'no swap',swap:'Swap',zombies:'zombies',inodes:'Inodes at',
+ free:'free',used:'used',user:'user',sys:'system',iowait:'I/O wait',steal:'steal',cached:'cache',avail:'available',diskIO:'Disk I/O',errors:'errors',perCore:'per core',booted:'booted',conns:'TCP connections',established:'established',listening:'listening',procsT:'Processes',threads:'threads',running:'running',fds:'File descriptors',temp:'Temperature',hottest:'hottest sensor',pressure:'Pressure (PSI)',unlimited:'no limit set',psiHelp:'% of time tasks waited in the last 10 s',
+ tFindings:'Findings',tPorts:'Ports',tServices:'Services',tSsl:'SSL',tVersions:'Versions',tProjects:'Projects',tContainers:'Containers',tSecurity:'Security',
+ all:'All',crit:'Critical',warn:'Warning',info:'Info',noFindings:'No findings here. Everything looks good.',nothing:'Nothing to show.',
+ port:'Port',proto:'Proto',listen:'Listening on',process:'Process',state:'State',publicP:'Public',localP:'Local only',
+ service:'Service',status:'Status',boot:'On boot',domains:'Domains',issuer:'Issuer',expires:'Expires',days:'Days',path:'Path',selfSigned:'self-signed',
+ software:'Software',version:'Version',project:'Project',type:'Type',requires:'Requires',vulns:'Vulnerabilities',issues:'Issues',notAudited:'not audited',
+ container:'Container',image:'Image',cpuRam:'CPU / RAM',inside:'Inside versions',cves:'CVEs',ports:'Ports',notScanned:'not scanned',restarts:'restarts',daysOld:'days old',
+ attempts:'Failed SSH logins (24 h)',ip:'IP',tries:'Attempts',
+ c_Versions:'Versions',c_Ports:'Ports',c_Services:'Services',c_SSL:'SSL',c_Permissions:'Permissions',c_Dependencies:'Dependencies',c_Docker:'Docker',c_Security:'Security',c_Resources:'Resources'},
+es:{setupTitle:'Configuración inicial',setupHelp:'Crea tu usuario y contraseña. El código de configuración se mostró en la terminal al instalar (o ejecuta <code>sudo devdoctor setup-code</code>).',
+ setupCode:'Código de configuración',username:'Usuario',password:'Contraseña',newPassMin:'Contraseña (mín. 10 caracteres)',repeatPass:'Repite la contraseña',createAccount:'Crear cuenta y entrar',
+ loginHelp:'Inicia sesión para ver el estado del servidor.',signIn:'Entrar',account:'Cuenta',signOut:'Salir',scanNow:'Escanear ahora',scanning:'Escaneando...',scanHint:'Revisando puertos, servicios, SSL, permisos, dependencias y contenedores',
+ healthTitle:'Salud del servidor',noScanYet:'Ejecutando el primer diagnóstico...',lastScan:'Último diagnóstico',critical:'críticos',warning:'avisos',infoN:'info',
+ disks:'Discos',topProcs:'Procesos con más CPU',newUser:'Nuevo usuario (opcional)',newPassOpt:'Nueva contraseña (opcional, mín. 10)',currentPass:'Contraseña actual',cancel:'Cancelar',save:'Guardar',
+ passMismatch:'Las contraseñas no coinciden',acctUpdated:'Cuenta actualizada. Inicia sesión de nuevo.',showPass:'Mostrar contraseña',hidePass:'Ocultar contraseña',copy:'Copiar',copied:'Copiado',
+ cpu:'CPU',memory:'Memoria',network:'Red',load:'Carga (1/5/15)',uptime:'Uptime',cores:'núcleos',of:'de',noSwap:'sin swap',swap:'Swap',zombies:'zombies',inodes:'Inodos al',
+ free:'libres',used:'usado',user:'usuario',sys:'sistema',iowait:'espera E/S',steal:'steal',cached:'caché',avail:'disponible',diskIO:'E/S de disco',errors:'errores',perCore:'por núcleo',booted:'arranque',conns:'Conexiones TCP',established:'establecidas',listening:'escuchando',procsT:'Procesos',threads:'hilos',running:'en ejecución',fds:'Descriptores de archivo',temp:'Temperatura',hottest:'sensor más caliente',pressure:'Presión (PSI)',unlimited:'sin límite',psiHelp:'% del tiempo que las tareas esperaron en los últimos 10 s',
+ tFindings:'Hallazgos',tPorts:'Puertos',tServices:'Servicios',tSsl:'SSL',tVersions:'Versiones',tProjects:'Proyectos',tContainers:'Contenedores',tSecurity:'Seguridad',
+ all:'Todos',crit:'Crítico',warn:'Aviso',info:'Info',noFindings:'Sin hallazgos aquí. Todo en orden.',nothing:'Nada que mostrar.',
+ port:'Puerto',proto:'Proto',listen:'Escucha en',process:'Proceso',state:'Estado',publicP:'Pública',localP:'Solo local',
+ service:'Servicio',status:'Estado',boot:'Arranque',domains:'Dominios',issuer:'Emisor',expires:'Expira',days:'Días',path:'Ruta',selfSigned:'autofirmado',
+ software:'Software',version:'Versión',project:'Proyecto',type:'Tipo',requires:'Requiere',vulns:'Vulnerabilidades',issues:'Problemas',notAudited:'no auditado',
+ container:'Contenedor',image:'Imagen',cpuRam:'CPU / RAM',inside:'Versiones internas',cves:'CVEs',ports:'Puertos',notScanned:'sin escanear',restarts:'reinicios',daysOld:'días',
+ attempts:'Intentos fallidos de SSH (24 h)',ip:'IP',tries:'Intentos',
+ c_Versions:'Versiones',c_Ports:'Puertos',c_Services:'Servicios',c_SSL:'SSL',c_Permissions:'Permisos',c_Dependencies:'Dependencias',c_Docker:'Docker',c_Security:'Seguridad',c_Resources:'Recursos'}
+};
+const ERR_ES={'not authenticated':'No autenticado','too many attempts; wait 15 minutes':'Demasiados intentos; espera 15 minutos','invalid request':'Solicitud inválida',
+ 'server busy, try again':'Servidor ocupado, inténtalo de nuevo','incorrect username or password':'Usuario o contraseña incorrectos','current password is incorrect':'La contraseña actual no es correcta',
+ 'username must be 3 to 64 characters':'El usuario debe tener entre 3 y 64 caracteres','wrong setup code or the account already exists':'Código de configuración incorrecto o la cuenta ya existe',
+ 'password must be at least 10 characters':'La contraseña debe tener al menos 10 caracteres','password must not exceed 128 characters':'La contraseña no puede superar 128 caracteres',
+ 'password must not contain your username':'La contraseña no puede contener tu nombre de usuario','password cannot be a single repeated character':'La contraseña no puede ser un solo carácter repetido',
+ 'password contains a word or sequence that is too common; use a longer passphrase (16+ characters) or something less predictable':'La contraseña contiene una palabra o secuencia demasiado común; usa una frase más larga (16+ caracteres) o algo menos predecible',
+ 'mix at least 3 character types (lowercase, uppercase, digits, symbols) or use a passphrase of 16+ characters':'Mezcla al menos 3 tipos (minúsculas, mayúsculas, números, símbolos) o usa una frase de 16+ caracteres',
+ 'server busy':'Servidor ocupado','invalid content type':'Tipo de contenido inválido','origin not allowed':'Origen no permitido'};
+let LANG='en';try{LANG=localStorage.getItem('dd_lang')||''}catch{}
+if(!['en','es'].includes(LANG))LANG=(navigator.language||'en').toLowerCase().startsWith('es')?'es':'en';
+const t=k=>(T[LANG][k]??T.en[k]??k);
+const errMsg=m=>LANG==='es'?(ERR_ES[m]||m):m;
+
+function applyLang(){
+  document.documentElement.lang=LANG;
+  document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));
+  document.querySelectorAll('[data-i18n-html]').forEach(e=>e.innerHTML=t(e.dataset.i18nHtml));
+  document.querySelectorAll('[data-lang]').forEach(e=>{e.innerHTML=['en','es'].map(l=>`<button type="button" data-l="${l}" class="${l===LANG?'on':''}">${l.toUpperCase()}</button>`).join('')});
+  $('#scanLbl').textContent=SCANNING?t('scanning'):t('scanNow');
+  document.querySelectorAll('.pw .eye').forEach(b=>b.title=t(b.dataset.on==='1'?'hidePass':'showPass'));
+  if(LAST_M)renderMetrics(LAST_M);renderReport();syncOverlay();
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-l]');if(!b)return;LANG=b.dataset.l;try{localStorage.setItem('dd_lang',LANG)}catch{}applyLang();if(!$('#app').classList.contains('hidden'))pollReport().catch(()=>{})});
+
+/* password fields with show/hide eye */
+document.querySelectorAll('input[type=password]').forEach(inp=>{
+  const w=document.createElement('div');w.className='pw';inp.parentNode.insertBefore(w,inp);w.appendChild(inp);
+  const b=document.createElement('button');b.type='button';b.className='eye';b.dataset.on='0';b.innerHTML=ic('eye');w.appendChild(b);
+  b.onclick=()=>{const show=inp.type==='password';inp.type=show?'text':'password';b.dataset.on=show?'1':'0';b.innerHTML=ic(show?'eyeoff':'eye');b.title=b.ariaLabel=t(show?'hidePass':'showPass')};
+});
+
+/* ---------------- helpers ---------------- */
 const api=async(path,body)=>{const r=await fetch('/api/'+path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  let j={};try{j=await r.json()}catch{} if(r.status===401&&path!=='login'){showLogin();throw 0} if(!r.ok)throw new Error(j.error||'error');return j};
+  let j={};try{j=await r.json()}catch{} if(r.status===401&&path!=='login'&&path!=='setup'&&path!=='account'){showLogin();throw 0} if(!r.ok)throw new Error(errMsg(j.error||'error'));return j};
 const bytes=n=>{const u=['B','KB','MB','GB','TB'];let i=0;n=+n||0;while(n>=1024&&i<4){n/=1024;i++}return n.toFixed(i?1:0)+' '+u[i]};
 const dur=s=>{s=Math.floor(s);const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+'d ':'')+h+'h '+m+'m'};
 const col=p=>p>=90?'var(--crit)':p>=75?'var(--warn)':'var(--ok)';
-const SEV={crit:'Crítico',warn:'Aviso',info:'Info',ok:'OK'};
-let timers=[],tab='Hallazgos',sevF='all',REP=null,SCANNING=false;
+const dot=k=>`<span class="dot ${k}"></span>`;
+const SEVK={crit:'crit',warn:'warn',info:'info',ok:'ok'};
+const CATICON={Versions:'layers',Ports:'globe',Services:'server',SSL:'lock',Permissions:'key',Dependencies:'pkg',Docker:'box',Security:'shield',Resources:'gauge'};
+let MANUAL=false,SCAN_T0=0,SCAN_TMR=null,POLL_T=null,timers=[],tab='findings',sevF='all',REP=null,SCANNING=false,LAST_M=null;
 
 function spark(arr,color,max){arr=arr||[];if(arr.length<2)return'<svg class="spark"></svg>';
-  const m=max||Math.max(...arr,1),w=300,h=42,st=w/(arr.length-1);
+  const m=max||Math.max(...arr,1),w=300,h=44,st=w/(arr.length-1);
   const pts=arr.map((v,i)=>(i*st).toFixed(1)+','+(h-2-(v/m)*(h-6)).toFixed(1)).join(' ');
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polygon points="0,${h} ${pts} ${w},${h}" fill="${color}" opacity=".15"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`}
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polygon points="0,${h} ${pts} ${w},${h}" fill="${color}" opacity=".14"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`}
+function donut(p){const r=30,c=2*Math.PI*r,k=col(p);return `<svg viewBox="0 0 76 76"><circle cx="38" cy="38" r="${r}" fill="none" stroke="var(--bg)" stroke-width="8"/><circle cx="38" cy="38" r="${r}" fill="none" stroke="${k}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c*Math.min(p,100)/100} ${c}" transform="rotate(-90 38 38)"/><text x="38" y="44" text-anchor="middle">${Math.round(p)}%</text></svg>`}
 
-function showLogin(){$('#setup').classList.add('hidden');timers.forEach(clearInterval);timers=[];$('#app').classList.add('hidden');$('#login').classList.remove('hidden');$('#lu').focus()}
-async function showApp(){$('#login').classList.add('hidden');$('#app').classList.remove('hidden');
+/* ---------------- screens ---------------- */
+function hideAll(){['#login','#setup','#app'].forEach(s=>$(s).classList.add('hidden'))}
+function showLogin(){timers.forEach(clearInterval);timers=[];hideAll();$('#login').classList.remove('hidden');$('#lu').focus()}
+async function showApp(){hideAll();$('#app').classList.remove('hidden');
   await Promise.all([pollMetrics(),pollReport()]);
   timers.push(setInterval(()=>pollMetrics().catch(()=>{}),2000),setInterval(()=>pollReport().catch(()=>{}),SCANNING?2000:10000))}
 
-async function pollMetrics(){const m=await api('metrics');renderMetrics(m)}
-async function pollReport(){const j=await api('report');const was=SCANNING;SCANNING=j.running;REP=j.report;
-  $('#scanBtn').disabled=SCANNING;$('#scanBtn').textContent=SCANNING?'Escaneando…':'Escanear ahora';
-  renderReport(); if(SCANNING&&!was)setTimeout(()=>pollReport().catch(()=>{}),2000)}
+async function pollMetrics(){const m=await api('metrics');LAST_M=m;renderMetrics(m)}
+async function pollReport(){const j=await api('report?lang='+LANG);const was=SCANNING;SCANNING=j.running;REP=j.report;
+  $('#scanBtn').disabled=SCANNING;$('#scanLbl').textContent=SCANNING?t('scanning'):t('scanNow');
+  renderReport();syncOverlay();clearTimeout(POLL_T);if(SCANNING)POLL_T=setTimeout(()=>pollReport().catch(()=>{}),1500)}
+
+function syncOverlay(){
+  const on=SCANNING&&(MANUAL||!REP),ov=$('#scanOv');
+  if(!SCANNING)MANUAL=false;
+  ov.classList.toggle('on',on);ov.setAttribute('aria-hidden',on?'false':'true');
+  document.body.style.overflow=on?'hidden':'';
+  $('#scanT').textContent=t('scanning');$('#scanH').textContent=t('scanHint');
+  if(on&&!SCAN_TMR){SCAN_T0=Date.now();const tick=()=>{$('#scanS').textContent=Math.floor((Date.now()-SCAN_T0)/1000)+' s'};tick();SCAN_TMR=setInterval(tick,1000)}
+  if(!on&&SCAN_TMR){clearInterval(SCAN_TMR);SCAN_TMR=null}
+}
+function procColor(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return `hsl(${h} 55% 45%)`}
 
 function renderMetrics(m){
-  $('#hostline').textContent=`${m.host} · ${m.os} · kernel ${m.kernel}`;
-  const memP=m.mem_total?m.mem_used/m.mem_total*100:0,swP=m.swap_total?m.swap_used/m.swap_total*100:0;
-  const H=m.history||{};
-  $('#kpis').innerHTML=[
-   `<div class="card kpi"><h2>CPU</h2><div class="v" style="color:${col(m.cpu)}">${m.cpu.toFixed(1)}%</div><div class="s">${m.cores} núcleos · ${esc(m.cpu_model||'')}</div>${spark(H.cpu,col(m.cpu),100)}</div>`,
-   `<div class="card kpi"><h2>Memoria</h2><div class="v" style="color:${col(memP)}">${memP.toFixed(0)}%</div><div class="s">${bytes(m.mem_used)} de ${bytes(m.mem_total)}</div>${spark(H.mem,col(memP),100)}</div>`,
-   `<div class="card kpi"><h2>Red</h2><div class="v" style="font-size:20px">↓ ${bytes(m.rx)}/s</div><div class="s">↑ ${bytes(m.tx)}/s</div>${spark(H.rx,'var(--info)')}</div>`,
-   `<div class="card kpi"><h2>Carga (1/5/15)</h2><div class="v">${m.load.map(x=>x.toFixed(2)).join(' ')}</div><div class="s">Swap ${m.swap_total?swP.toFixed(0)+'% de '+bytes(m.swap_total):'sin swap'} · zombies ${m.zombies}</div></div>`,
-   `<div class="card kpi"><h2>Uptime</h2><div class="v" style="font-size:20px">${dur(m.uptime_sec)}</div><div class="s mono">${(m.ips||[]).map(esc).join(' · ')}</div></div>`
-  ].join('');
-  $('#disks').innerHTML=(m.disks||[]).map(d=>`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between"><span class="mono">${esc(d.mount)} <span class="muted">${esc(d.type)}</span></span><span>${bytes(d.used)} / ${bytes(d.total)} · <b style="color:${col(d.pct)}">${d.pct.toFixed(0)}%</b></span></div><div class="bar"><i style="width:${Math.min(d.pct,100)}%;background:${col(d.pct)}"></i></div>${d.inode_pct>=70?`<div class="s warn">Inodos al ${d.inode_pct}%</div>`:''}</div>`).join('')||'<span class="muted">Sin datos</span>';
-  $('#procs').innerHTML='<tr><th>PID</th><th>Usuario</th><th>CPU</th><th>MEM</th><th>Comando</th></tr>'+(m.procs||[]).map(p=>`<tr><td>${p.pid}</td><td>${esc(p.user)}</td><td>${p.cpu}%</td><td>${p.mem}%</td><td class="mono">${esc(p.cmd)}</td></tr>`).join('');
+  const memP=m.mem_total?m.mem_used/m.mem_total*100:0,swP=m.swap_total?m.swap_used/m.swap_total*100:0,H=m.history||{};
+  $('#sysTags').innerHTML=[
+    `<span class="tag">${ic('server','sm')}${esc(m.host)}</span>`,
+    `<span class="tag">${ic('term','sm')}${esc(m.os)}</span>`,
+    `<span class="tag mono">${ic('tag','sm')}kernel ${esc(m.kernel)}</span>`,
+    `<span class="tag">${ic('cpu','sm')}${m.cores} ${t('cores')}</span>`,
+    ...(m.ips||[]).map(ip=>`<span class="tag mono">${ic('globe','sm')}${esc(ip)}</span>`)].join('');
+  const st=(arr)=>'<div class="stats">'+arr.filter(Boolean).map(x=>'<span>'+x+'</span>').join('')+'</div>';
+  const kv=(l,v,c)=>l+' <b'+(c?' style="color:'+c+'"':'')+'>'+v+'</b>';
+  const cb=m.cpu_break||{},ps=m.psi||{},tk=m.tasks||{},cn=m.conns||{};
+  const dsum=(H.disk_r||[]).map((v,i)=>v+((H.disk_w||[])[i]||0));
+  const fdP=m.fd_max?m.fd_used/m.fd_max*100:0;
+  const card=(ico,title,v,sub,extra,sp)=>'<div class="card kpi"><div class="hd">'+ic(ico,'sm')+title+'</div><div class="v">'+v+'</div><div class="s">'+sub+'</div>'+(extra||'')+(sp||'')+'</div>';
+  const meter=(l,p,c)=>'<div class="meter"><div class="t"><span>'+l+'</span><b>'+p.toFixed(1)+'%</b></div><div class="bar"><i style="width:'+Math.min(p*2,100)+'%;background:'+c+'"></i></div></div>';
+  const cards=[
+   card('cpu',t('cpu'),'<span style="color:'+col(m.cpu)+'">'+m.cpu.toFixed(1)+'%</span>',esc(m.cpu_model||'')+' · '+m.cores+' '+t('cores'),
+     st([kv(t('user'),(cb.user||0).toFixed(1)+'%'),kv(t('sys'),(cb.system||0).toFixed(1)+'%'),kv(t('iowait'),(cb.iowait||0).toFixed(1)+'%',(cb.iowait||0)>10?'var(--warn)':''),kv(t('steal'),(cb.steal||0).toFixed(1)+'%',(cb.steal||0)>5?'var(--crit)':'')]),spark(H.cpu,col(m.cpu),100)),
+   card('mem',t('memory'),'<span style="color:'+col(memP)+'">'+memP.toFixed(0)+'%</span>',bytes(m.mem_used)+' '+t('of')+' '+bytes(m.mem_total),
+     st([kv(t('cached'),bytes(m.mem_cached)),kv(t('avail'),bytes(m.mem_avail)),kv(t('swap'),m.swap_total?swP.toFixed(0)+'% / '+bytes(m.swap_total):t('noSwap'),swP>50?'var(--warn)':'')]),spark(H.mem,col(memP),100)),
+   card('net',t('network'),ic('down','sm')+' '+bytes(m.rx)+'/s',ic('up','sm')+' '+bytes(m.tx)+'/s',
+     st([kv('pkts/s',Math.round(m.rx_pkts||0)+' / '+Math.round(m.tx_pkts||0)),kv(t('errors'),m.net_errs||0,(m.net_errs||0)>0?'var(--warn)':'')]),spark(H.rx,'var(--info)')),
+   card('disk',t('diskIO'),ic('down','sm')+' '+bytes(m.disk_read||0)+'/s',ic('up','sm')+' '+bytes(m.disk_write||0)+'/s',
+     st([kv('IOPS',Math.round(m.disk_iops||0))]),spark(dsum,'var(--acc)')),
+   card('act',t('load'),m.load.map(x=>x.toFixed(2)).join(' '),t('perCore')+': '+(m.cores?(m.load[0]/m.cores).toFixed(2):'-'),
+     st([kv(t('zombies'),m.zombies,m.zombies>5?'var(--warn)':'')])),
+   card('clock',t('uptime'),dur(m.uptime_sec),t('booted')+' '+new Date(Date.now()-m.uptime_sec*1000).toLocaleString(LANG)),
+   card('globe',t('conns'),cn.established??0,t('established'),st([kv('time-wait',cn.time_wait??0),kv(t('listening'),cn.listen??0)])),
+   card('layers',t('procsT'),tk.processes??0,(tk.threads??0)+' '+t('threads'),st([kv(t('running'),tk.running??0)])),
+   card('key',t('fds'),(m.fd_used||0).toLocaleString(LANG),m.fd_max>1e12?t('unlimited'):t('of')+' '+(m.fd_max||0).toLocaleString(LANG)+' ('+fdP.toFixed(2)+'%)',
+     m.fd_max>1e12?'':'<div class="bar" style="margin-top:8px"><i style="width:'+Math.min(fdP*4,100)+'%;background:'+col(fdP*4)+'"></i></div>')
+  ];
+  if(m.temp_c>0)cards.push(card('gauge',t('temp'),'<span style="color:'+(m.temp_c>=85?'var(--crit)':m.temp_c>=70?'var(--warn)':'var(--ok)')+'">'+m.temp_c.toFixed(0)+' °C</span>',t('hottest')));
+  if(ps.available)cards.push('<div class="card kpi"><div class="hd">'+ic('shield','sm')+t('pressure')+'</div><div class="meters1">'+meter('CPU',ps.cpu,col(ps.cpu*3))+meter('MEM',ps.mem,col(ps.mem*3))+meter('I/O',ps.io,col(ps.io*3))+'</div><div class="s">'+t('psiHelp')+'</div></div>');
+  $('#kpis').innerHTML=cards.join('');
+  $('#disks').innerHTML=(m.disks||[]).map(d=>`<div class="disk">${donut(d.pct)}<div class="m mono">${esc(d.mount)}</div><div class="u">${bytes(d.used)} / ${bytes(d.total)}<br>${esc(d.type)}${d.inode_pct>=70?` · <span class="warn">${t('inodes')} ${d.inode_pct}%</span>`:''}</div></div>`).join('')||`<span class="muted">${t('nothing')}</span>`;
+  $('#procs').innerHTML=(m.procs||[]).map(p=>`<div class="proc"><div class="av" style="background:${procColor(p.cmd)}">${esc((p.cmd[0]||'?').toUpperCase())}</div><div style="min-width:0"><div class="nm"><b>${esc(p.cmd)}</b><span class="mini mono">PID ${p.pid}</span><span class="mini">${esc(p.user)}</span></div>
+    <div class="meters"><div class="meter"><div class="t"><span>CPU</span><b>${p.cpu}%</b></div><div class="bar"><i style="width:${Math.min(p.cpu,100)}%;background:${col(p.cpu)}"></i></div></div>
+    <div class="meter"><div class="t"><span>MEM</span><b>${p.mem}%</b></div><div class="bar"><i style="width:${Math.min(p.mem*3,100)}%;background:var(--info)"></i></div></div></div></div></div>`).join('');
 }
 
-function ring(score){const c=2*Math.PI*42,col=score>=80?'var(--ok)':score>=55?'var(--warn)':'var(--crit)';
-  $('#ring').innerHTML=`<circle cx="50" cy="50" r="42" fill="none" stroke="var(--panel2)" stroke-width="9"/><circle cx="50" cy="50" r="42" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c*score/100} ${c}" transform="rotate(-90 50 50)"/><text x="50" y="58" text-anchor="middle">${score}</text>`}
+function ring(score){const c=2*Math.PI*42,k=score>=80?'var(--ok)':score>=55?'var(--warn)':'var(--crit)';
+  $('#ring').innerHTML=`<circle cx="50" cy="50" r="42" fill="none" stroke="var(--panel2)" stroke-width="9"/><circle cx="50" cy="50" r="42" fill="none" stroke="${k}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c*score/100} ${c}" transform="rotate(-90 50 50)"/><text x="50" y="58" text-anchor="middle">${score}</text>`}
 
 function renderReport(){
   const r=REP;
-  if(!r){ring(0);$('#scoreTxt').textContent=SCANNING?'Ejecutando primer diagnóstico…':'Aún no hay diagnóstico';renderTabs();return}
+  if(!r){ring(0);$('#scoreTxt').textContent=t('noScanYet');$('#pills').innerHTML='';renderTabs();return}
   ring(r.score);
-  $('#scoreTxt').textContent=`Último diagnóstico: ${new Date(r.started).toLocaleString()} · ${(r.duration_ms/1000).toFixed(1)}s`;
-  $('#pills').innerHTML=['crit','warn','info'].map(k=>`<span class="pill ${k}">${r.counts[k]||0} ${SEV[k].toLowerCase()}${(r.counts[k]||0)==1?'':'s'}</span>`).join('');
+  $('#scoreTxt').textContent=`${t('lastScan')}: ${new Date(r.started).toLocaleString(LANG)} · ${(r.duration_ms/1000).toFixed(1)}s`;
+  $('#pills').innerHTML=[['crit','critical'],['warn','warning'],['info','infoN']].map(([k,l])=>`<span class="pill ${k}">${dot(k)}${r.counts[k]||0} ${t(l)}</span>`).join('');
   renderTabs();
 }
 
-const TABS=['Hallazgos','Puertos','Servicios','SSL','Versiones','Proyectos','Contenedores','Seguridad'];
-function renderTabs(){
-  $('#tabs').innerHTML=TABS.map(t=>`<button class="${t===tab?'on':''}" data-t="${t}">${t}</button>`).join('');
-  $('#tabs').onclick=e=>{if(e.target.dataset.t){tab=e.target.dataset.t;renderTabs()}};
-  const r=REP||{};let h='';
-  const tbl=(head,rows)=>rows.length?`<div class="tw"><table><tr>${head.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.join('')}</table></div>`:'<span class="muted">Nada que mostrar.</span>';
-  const fl=(list)=>list.length?list.map(f=>`<div class="f ${f.severity}"><div class="m">${SEV[f.severity]} · ${esc(f.category)}</div><div class="t">${esc(f.title)}</div>${f.detail?`<pre>${esc(f.detail)}</pre>`:''}${f.fix?`<div class="fix mono">→ ${esc(f.fix)}</div>`:''}</div>`).join(''):'<span class="muted">Sin hallazgos en esta categoría. 🎉</span>';
-  if(tab==='Hallazgos'){const all=r.findings||[];
-    h=`<div class="filters">${['all','crit','warn','info'].map(k=>`<button data-s="${k}" class="${sevF===k?'on':''}">${k==='all'?'Todos':SEV[k]}</button>`).join('')}</div>`+fl(all.filter(f=>sevF==='all'||f.severity===sevF))}
-  else if(tab==='Puertos')h=tbl(['Puerto','Proto','Escucha en','Proceso','Estado'],(r.ports||[]).map(p=>`<tr><td><b>${p.port}</b></td><td>${esc(p.proto)}</td><td class="mono">${esc(p.addr)}</td><td>${esc(p.process||'—')}${p.pid?` <span class="muted">(${p.pid})</span>`:''}</td><td>${p.note?`<span class="crit">${esc(p.note)}</span>`:p.exposed?'<span class="warn">Pública</span>':'<span class="ok">Solo local</span>'}</td></tr>`));
-  else if(tab==='Servicios')h=tbl(['Servicio','Estado','Arranque'],(r.services||[]).map(s=>`<tr><td><b>${esc(s.name)}</b></td><td class="${s.active==='active'?'ok':s.enabled==='enabled'?'crit':'muted'}">${esc(s.active)}</td><td>${esc(s.enabled)}</td></tr>`))+fl((r.findings||[]).filter(f=>f.category==='Servicios'));
-  else if(tab==='SSL')h=tbl(['Dominios','Emisor','Expira','Días','Ruta'],(r.certs||[]).map(c=>`<tr><td>${esc((c.dns&&c.dns.length?c.dns.join(', '):c.subject))}${c.self_signed?' <span class="info">(autofirmado)</span>':''}</td><td>${esc(c.issuer)}</td><td>${new Date(c.not_after).toLocaleDateString()}</td><td class="${c.days_left<=14?'crit':c.days_left<=30?'warn':'ok'}"><b>${c.days_left}</b></td><td class="mono">${esc(c.path)}</td></tr>`))+'<div style="height:12px"></div>'+fl((r.findings||[]).filter(f=>f.category==='SSL'&&!/expira|EXPIRADO/.test(f.title)));
-  else if(tab==='Versiones')h=tbl(['Software','Versión','Estado'],(r.versions||[]).map(v=>`<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.version)}</td><td class="${v.status}">${esc(v.note||'OK')}</td></tr>`));
-  else if(tab==='Proyectos')h=tbl(['Proyecto','Tipo','Requiere','Vulnerabilidades','Problemas'],(r.projects||[]).map(p=>`<tr><td class="mono">${esc(p.path)}</td><td>${esc(p.framework||'—')}</td><td class="mono">${esc([p.php_req&&'php '+p.php_req,p.node_req&&'node '+p.node_req].filter(Boolean).join(' · ')||'—')}</td><td>${p.vulns?Object.entries(p.vulns).filter(([k])=>k==='composer'||k==='npm').map(([k,v])=>`<span class="${v?'crit':'ok'}">${k}: ${v}</span>`).join(' · '):'<span class="muted">no auditado</span>'}</td><td class="${p.issues?'warn':'ok'}">${p.issues}</td></tr>`))+'<div style="height:12px"></div>'+fl((r.findings||[]).filter(f=>f.category==='Dependencias'));
-  else if(tab==='Contenedores')h=tbl(['Contenedor','Imagen','Estado','Versiones internas','CPU / RAM','CVEs','Puertos'],(r.containers||[]).map(c=>'<tr><td><b>'+esc(c.name)+'</b><div class="muted">'+esc(c.user)+(c.restarts?' · '+c.restarts+' reinicios':'')+'</div></td><td class="mono">'+esc(c.image)+'<div class="muted">'+(c.age_days?c.age_days+' días':'')+'</div></td><td class="'+(c.state==='running'?'ok':'crit')+'">'+esc(c.state)+'</td><td>'+((c.versions||[]).map(v=>'<span class="'+v.status+'">'+esc(v.name+' '+v.version)+'</span>').join('<br>')||'<span class="muted">—</span>')+'</td><td class="mono">'+esc(c.cpu||'—')+'<div class="muted">'+esc(c.mem||'')+'</div></td><td>'+(c.vulns?'<span class="'+(c.vulns.critical?'crit':c.vulns.high?'warn':'ok')+'">'+(c.vulns.critical||0)+' crít / '+(c.vulns.high||0)+' altas</span>':'<span class="muted">sin escanear</span>')+'</td><td class="mono">'+esc((c.ports||[]).join(', ')||'—')+'</td></tr>'))+'<div style="height:12px"></div>'+fl((r.findings||[]).filter(f=>f.category==='Docker'));
-  else if(tab==='Seguridad')h=(r.attackers&&r.attackers.length?`<h2>Intentos fallidos de SSH (24 h)</h2>`+tbl(['IP','Intentos'],r.attackers.map(a=>`<tr><td class="mono">${esc(a.ip)}</td><td><b>${a.count}</b></td></tr>`))+'<div style="height:14px"></div>':'')+fl((r.findings||[]).filter(f=>['Seguridad','Permisos','Recursos'].includes(f.category)));
-  $('#tabBody').innerHTML=h;
-  $('#tabBody').onclick=e=>{if(e.target.dataset.s){sevF=e.target.dataset.s;renderTabs()}};
-}
+const TABS=[['findings','list','tFindings',null],['ports','globe','tPorts',['Ports']],['services','server','tServices',['Services']],['ssl','lock','tSsl',['SSL']],['versions','layers','tVersions',['Versions']],
+ ['projects','pkg','tProjects',['Dependencies']],['containers','box','tContainers',['Docker']],['security','shield','tSecurity',['Security','Permissions','Resources']]];
 
+function badge(cats,r){const fs=(r.findings||[]).filter(f=>!cats||cats.includes(f.category));const c=fs.filter(f=>f.severity==='crit').length,w=fs.filter(f=>f.severity==='warn').length;
+  const n=c+w;return n?`<span class="n ${c?'crit':'warn'}">${n}</span>`:''}
+
+function findings(list){
+  if(!list.length)return`<div class="empty">${ic('okc')}<div>${t('noFindings')}</div></div>`;
+  return`<div class="fl">`+list.map((f,i)=>`<div class="f"><div class="ic">${ic(CATICON[f.category]||'shield')}</div><div>
+    <div class="meta"><span class="sev ${f.severity}">${dot(f.severity)}${t(f.severity)}</span><span class="cat">${esc(t('c_'+f.category))}</span></div>
+    <div class="t">${esc(f.title)}</div>${f.detail?`<pre>${esc(f.detail)}</pre>`:''}
+    ${f.fix?`<div class="fix"><code>${esc(f.fix)}</code><button type="button" data-copy="${esc(f.fix)}" title="${t('copy')}">${ic('copy','sm')}</button></div>`:''}</div></div>`).join('')+`</div>`;
+}
+const tbl=(head,rows)=>rows.length?`<div class="tw"><table><thead><tr>${head.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`:`<div class="empty muted">${t('nothing')}</div>`;
+
+function renderTabs(){
+  const r=REP||{};
+  $('#tabs').innerHTML=TABS.map(([id,icon,label,cats])=>`<button data-t="${id}" class="${id===tab?'on':''}">${ic(icon,'sm')}${t(label)}${badge(cats,r)}</button>`).join('');
+  const F=r.findings||[],cat=c=>F.filter(f=>c.includes(f.category));let h='';
+  if(tab==='findings')h=`<div class="filters">${['all','crit','warn','info'].map(k=>`<button data-s="${k}" class="${sevF===k?'on':''}">${k!=='all'?dot(k):''}${t(k)}</button>`).join('')}</div>`+findings(F.filter(f=>sevF==='all'||f.severity===sevF));
+  else if(tab==='ports')h=tbl([t('port'),t('proto'),t('listen'),t('process'),t('state')],(r.ports||[]).map(p=>`<tr><td><b>${p.port}</b></td><td>${esc(p.proto)}</td><td class="mono">${esc(p.addr)}</td><td>${esc(p.process||'-')}${p.pid?` <span class="muted">(${p.pid})</span>`:''}</td><td>${p.note?`<span class="st crit">${dot('crit')}${esc(p.note)}</span>`:p.exposed?`<span class="st warn">${dot('warn')}${t('publicP')}</span>`:`<span class="st ok">${dot('ok')}${t('localP')}</span>`}</td></tr>`))+'<div class="gap"></div>'+findings(cat(['Ports']));
+  else if(tab==='services')h=tbl([t('service'),t('status'),t('boot')],(r.services||[]).map(s=>{const k=s.active==='active'?'ok':s.enabled==='enabled'?'crit':'mut';return`<tr><td><b>${esc(s.name)}</b></td><td><span class="st ${k}">${dot(k)}${esc(s.active)}</span></td><td class="muted">${esc(s.enabled)}</td></tr>`}))+'<div class="gap"></div>'+findings(cat(['Services']));
+  else if(tab==='ssl')h=tbl([t('domains'),t('issuer'),t('expires'),t('days'),t('path')],(r.certs||[]).map(c=>{const k=c.days_left<=14?'crit':c.days_left<=30?'warn':'ok';return`<tr><td>${esc(c.dns&&c.dns.length?c.dns.join(', '):c.subject)}${c.self_signed?` <span class="tag" style="padding:1px 8px">${t('selfSigned')}</span>`:''}</td><td>${esc(c.issuer)}</td><td>${new Date(c.not_after).toLocaleDateString(LANG)}</td><td><span class="st ${k}">${dot(k)}${c.days_left}</span></td><td class="mono muted">${esc(c.path)}</td></tr>`}))+'<div class="gap"></div>'+findings(cat(['SSL']).filter(f=>!/expire|EXPIRED|expira|EXPIRADO/.test(f.title)));
+  else if(tab==='versions')h=tbl([t('software'),t('version'),t('status')],(r.versions||[]).map(v=>`<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.version)}</td><td><span class="st ${v.status}">${dot(v.status)}${esc(v.note||'OK')}</span></td></tr>`));
+  else if(tab==='projects')h=tbl([t('project'),t('type'),t('requires'),t('vulns'),t('issues')],(r.projects||[]).map(p=>`<tr><td class="mono">${esc(p.path)}</td><td>${esc(p.framework||'-')}</td><td class="mono">${esc([p.php_req&&'php '+p.php_req,p.node_req&&'node '+p.node_req].filter(Boolean).join(' · ')||'-')}</td><td>${p.vulns?Object.entries(p.vulns).filter(([k])=>k==='composer'||k==='npm').map(([k,v])=>`<span class="st ${v?'crit':'ok'}">${dot(v?'crit':'ok')}${k}: ${v}</span>`).join(' &nbsp; '):`<span class="muted">${t('notAudited')}</span>`}</td><td><span class="st ${p.issues?'warn':'ok'}">${dot(p.issues?'warn':'ok')}${p.issues}</span></td></tr>`))+'<div class="gap"></div>'+findings(cat(['Dependencies']));
+  else if(tab==='containers')h=tbl([t('container'),t('image'),t('state'),t('inside'),t('cpuRam'),t('cves'),t('ports')],(r.containers||[]).map(c=>`<tr><td><b>${esc(c.name)}</b><div class="muted">${esc(c.user)}${c.restarts?' · '+c.restarts+' '+t('restarts'):''}</div></td><td class="mono">${esc(c.image)}<div class="muted">${c.age_days?c.age_days+' '+t('daysOld'):''}</div></td><td><span class="st ${c.state==='running'?'ok':'crit'}">${dot(c.state==='running'?'ok':'crit')}${esc(c.state)}</span></td><td>${(c.versions||[]).map(v=>`<span class="st ${v.status}">${dot(v.status)}${esc(v.name+' '+v.version)}</span>`).join('<br>')||'<span class="muted">-</span>'}</td><td class="mono">${esc(c.cpu||'-')}<div class="muted">${esc(c.mem||'')}</div></td><td>${c.vulns?`<span class="st ${c.vulns.critical?'crit':c.vulns.high?'warn':'ok'}">${dot(c.vulns.critical?'crit':c.vulns.high?'warn':'ok')}${c.vulns.critical||0} / ${c.vulns.high||0}</span>`:`<span class="muted">${t('notScanned')}</span>`}</td><td class="mono">${esc((c.ports||[]).join(', ')||'-')}</td></tr>`))+'<div class="gap"></div>'+findings(cat(['Docker']));
+  else if(tab==='security')h=(r.attackers&&r.attackers.length?`<h2>${ic('shield','sm')}${t('attempts')}</h2><div class="atk">${r.attackers.map(a=>`<div><span class="mono">${esc(a.ip)}</span><b>${a.count}</b></div>`).join('')}</div>`:'')+findings(cat(['Security','Permissions','Resources']));
+  $('#tabBody').innerHTML=h;
+}
+$('#tabs').onclick=e=>{const b=e.target.closest('[data-t]');if(b){tab=b.dataset.t;renderTabs()}};
+$('#tabBody').onclick=e=>{
+  const s=e.target.closest('[data-s]');if(s){sevF=s.dataset.s;renderTabs();return}
+  const c=e.target.closest('[data-copy]');if(c){const txt=c.dataset.copy;const done=()=>{c.innerHTML=ic('check','sm');setTimeout(()=>c.innerHTML=ic('copy','sm'),1200)};
+    if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(txt).then(done,()=>{});else{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch{}ta.remove()}}};
+
+/* ---------------- forms ---------------- */
 $('#lf').onsubmit=async e=>{e.preventDefault();$('#le').textContent='';
   try{await api('login',{username:$('#lu').value,password:$('#lp').value});$('#lp').value='';await showApp()}catch(x){$('#le').textContent=x.message||''}};
+$('#sf').onsubmit=async e=>{e.preventDefault();$('#se').textContent='';
+  if($('#sp').value!==$('#sr').value){$('#se').textContent=t('passMismatch');return}
+  try{await api('setup',{token:$('#st').value.trim(),username:$('#su').value,password:$('#sp').value});['#st','#sp','#sr'].forEach(s=>$(s).value='');await showApp()}catch(x){$('#se').textContent=x.message||''}};
 $('#outBtn').onclick=async()=>{await api('logout',{}).catch(()=>{});showLogin()};
-$('#scanBtn').onclick=async()=>{await api('scan',{});SCANNING=true;await pollReport()};
+$('#scanBtn').onclick=async()=>{MANUAL=true;SCANNING=true;syncOverlay();try{await api('scan',{})}catch(x){}await pollReport()};
 $('#acctBtn').onclick=()=>{$('#ae').textContent='';$('#acct').showModal()};
 $('#ax').onclick=()=>$('#acct').close();
 $('#af').onsubmit=async e=>{e.preventDefault();$('#ae').textContent='';
-  try{await api('account',{current:$('#ac').value,username:$('#au').value,password:$('#an').value});$('#acct').close();['#ac','#au','#an'].forEach(s=>$(s).value='');alert('Cuenta actualizada. Inicia sesión de nuevo.');showLogin()}catch(x){$('#ae').textContent=x.message||''}};
+  try{await api('account',{current:$('#ac').value,username:$('#au').value,password:$('#an').value});$('#acct').close();['#ac','#au','#an'].forEach(s=>$(s).value='');alert(t('acctUpdated'));showLogin()}catch(x){$('#ae').textContent=x.message||''}};
 
-$('#sf').onsubmit=async e=>{e.preventDefault();$('#se').textContent='';
-  if($('#sp').value!==$('#sr').value){$('#se').textContent='Las contraseñas no coinciden';return}
-  try{await api('setup',{token:$('#st').value.trim(),username:$('#su').value,password:$('#sp').value});['#st','#sp','#sr'].forEach(s=>$(s).value='');$('#setup').classList.add('hidden');await showApp()}catch(x){$('#se').textContent=x.message||''}};
-
-(async()=>{try{const s=await(await fetch('/api/status')).json();if(s.setup){$('#setup').classList.remove('hidden');$('#st').focus();return}}catch{}
+applyLang();
+(async()=>{try{const s=await(await fetch('/api/status')).json();if(s.setup){hideAll();$('#setup').classList.remove('hidden');$('#st').focus();return}}catch{}
   api('me').then(showApp).catch(()=>showLogin())})();
 </script>
 </body>

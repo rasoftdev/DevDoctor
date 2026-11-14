@@ -14,6 +14,8 @@ type Finding struct {
 	Title    string `json:"title"`
 	Detail   string `json:"detail,omitempty"`
 	Fix      string `json:"fix,omitempty"`
+
+	t, d, f Msg // originales traducibles
 }
 
 type PortInfo struct {
@@ -24,6 +26,8 @@ type PortInfo struct {
 	PID     int    `json:"pid"`
 	Exposed bool   `json:"exposed"`
 	Note    string `json:"note,omitempty"`
+
+	noteM Msg
 }
 
 type ServiceInfo struct {
@@ -47,6 +51,8 @@ type VersionInfo struct {
 	Version string `json:"version"`
 	Status  string `json:"status"`
 	Note    string `json:"note,omitempty"`
+
+	noteM Msg
 }
 
 type ProjectInfo struct {
@@ -85,10 +91,17 @@ type Collector struct {
 	sam *sysinfo.Sampler
 }
 
-func (c *Collector) add(cat, sev, title, detail, fix string) {
+// add registra un hallazgo. title/detail/fix pueden ser Msg o string (literal traducible).
+func (c *Collector) add(cat, sev string, title, detail, fix any) {
+	t, d, f := msgOf(title), msgOf(detail), msgOf(fix)
 	c.mu.Lock()
-	c.R.Findings = append(c.R.Findings, Finding{cat, sev, title, detail, fix})
+	c.R.Findings = append(c.R.Findings, Finding{Category: cat, Severity: sev, Title: t.Render("en"), Detail: d.Render("en"), Fix: f.Render("en"), t: t, d: d, f: f})
 	c.mu.Unlock()
+}
+
+// mkVer construye un VersionInfo con nota traducible.
+func mkVer(name, version, status string, note Msg) VersionInfo {
+	return VersionInfo{Name: name, Version: version, Status: status, Note: note.Render("en"), noteM: note}
 }
 
 type Scanner struct {
@@ -169,17 +182,14 @@ func (s *Scanner) RunSync() *Report {
 			penalty[f.Category] += 4
 		}
 	}
-	score := 100
+	total := 0
 	for _, p := range penalty {
 		if p > 35 {
 			p = 35
 		}
-		score -= p
+		total += p
 	}
-	if score < 0 {
-		score = 0
-	}
-	r.Score = score
+	r.Score = int(100 / (1 + float64(total)/60)) // 0 puntos = 100, 60 = 50, nunca cae de golpe a 0
 	sort.Slice(r.Ports, func(i, j int) bool { return r.Ports[i].Port < r.Ports[j].Port })
 	sort.Slice(r.Certs, func(i, j int) bool { return r.Certs[i].DaysLeft < r.Certs[j].DaysLeft })
 	r.DurationMs = time.Since(r.Started).Milliseconds()
@@ -188,3 +198,34 @@ func (s *Scanner) RunSync() *Report {
 
 // New crea un Scanner que lee su configuración del Store y recursos del Sampler.
 func New(cs *config.Store, sam *sysinfo.Sampler) *Scanner { return &Scanner{cfg: cs, sam: sam} }
+
+// Localize devuelve una copia del informe con los textos en el idioma pedido ("en" o "es").
+func (r *Report) Localize(lang string) *Report {
+	c := *r
+	c.Findings = make([]Finding, len(r.Findings))
+	for i, f := range r.Findings {
+		f.Title, f.Detail, f.Fix = f.t.Render(lang), f.d.Render(lang), f.f.Render(lang)
+		c.Findings[i] = f
+	}
+	c.Versions = localizeVersions(r.Versions, lang)
+	c.Ports = make([]PortInfo, len(r.Ports))
+	for i, p := range r.Ports {
+		p.Note = p.noteM.Render(lang)
+		c.Ports[i] = p
+	}
+	c.Containers = make([]ContainerInfo, len(r.Containers))
+	for i, ct := range r.Containers {
+		ct.Versions = localizeVersions(ct.Versions, lang)
+		c.Containers[i] = ct
+	}
+	return &c
+}
+
+func localizeVersions(in []VersionInfo, lang string) []VersionInfo {
+	out := make([]VersionInfo, len(in))
+	for i, v := range in {
+		v.Note = v.noteM.Render(lang)
+		out[i] = v
+	}
+	return out
+}

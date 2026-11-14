@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
 	"devdoctor/internal/config"
 	"devdoctor/internal/scanner"
@@ -9,13 +10,19 @@ import (
 	"devdoctor/internal/version"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -40,20 +47,27 @@ func main() {
 		cmdSetupCode(args)
 	case "scan":
 		cmdScan(args)
+	case "update":
+		cmdUpdate(args)
+	case "uninstall":
+		cmdUninstall(args)
 	case "version", "-v", "--version":
 		fmt.Println("devdoctor", version.Version)
 	default:
 		fmt.Println(`DevDoctor ` + version.Version + `
 
-Uso: devdoctor <comando> [opciones]
+Usage: devdoctor <command> [options]
 
-  init     Crea la configuración, el certificado TLS y el usuario (--port, --host, --user, --password)
-  run      Inicia el dashboard web (lo que ejecuta el servicio systemd)
-  url      Muestra la URL de acceso
-  setup-code  Muestra el código para crear la cuenta en la web (primer acceso)
-  passwd   Cambia usuario/contraseña desde la terminal (--user, --password)
-  scan     Ejecuta un diagnóstico en la terminal (--json para salida JSON)
-  version  Muestra la versión`)
+  init        Create the configuration, TLS certificate and (optionally) the account
+              (--port, --host, --listen, --user, --password)
+  run         Start the web dashboard (what the systemd service runs)
+  url         Print the access URL
+  setup-code  Print the one-time code used to create the account in the web UI
+  passwd      Change username/password from the terminal (--user, --password)
+  scan        Run a diagnosis in the terminal (--json for JSON output)
+  update      Update to the latest version (--check to only look, --ref, --force)
+  uninstall   Remove DevDoctor from this server (--yes, --keep-config)
+  version     Print the version`)
 	}
 }
 
@@ -63,7 +77,7 @@ func fail(err error) {
 }
 
 func configFlag(fs *flag.FlagSet) *string {
-	return fs.String("config", config.DefaultPath(), "ruta del archivo de configuración")
+	return fs.String("config", config.DefaultPath(), "path to the configuration file")
 }
 
 func portFree(p int) bool {
@@ -78,26 +92,26 @@ func portFree(p int) bool {
 func cmdInit(args []string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	path := configFlag(fs)
-	port := fs.Int("port", 0, "puerto (por defecto: uno aleatorio libre entre 61000 y 64999)")
-	host := fs.String("host", "", "IP o dominio público para la URL (auto-detecta si se omite)")
-	user := fs.String("user", "admin", "usuario (sólo con --password; si no, se define en la web)")
-	pass := fs.String("password", "", "contraseña (opcional; si se omite, se crea en la web al primer acceso)")
-	listen := fs.String("listen", "", "interfaz de escucha (vacío = todas; 127.0.0.1 si usarás Nginx/Apache como proxy)")
-	force := fs.Bool("force", false, "sobrescribir configuración existente")
+	port := fs.Int("port", 0, "port (default: a random free port between 61000 and 64999)")
+	host := fs.String("host", "", "public IP or domain shown in the URL (auto-detected if omitted)")
+	user := fs.String("user", "admin", "username (only with --password; otherwise it is created in the web UI)")
+	pass := fs.String("password", "", "password (optional; if omitted, you create it in the web UI on first access)")
+	listen := fs.String("listen", "", "listen interface (empty = all; 127.0.0.1 if you will use Nginx/Apache as a proxy)")
+	force := fs.Bool("force", false, "overwrite existing configuration")
 	fs.Parse(args)
 
 	if _, err := os.Stat(*path); err == nil && !*force {
-		fmt.Println("Ya existe configuración en", *path, "(usa --force para recrearla).")
+		fmt.Println("Configuration already exists at", *path, "(use --force to recreate it).")
 		cmdURL([]string{"--config", *path})
 		return
 	}
 	p := *port
 	if p == 0 {
 		if p = pickPort(); p == 0 {
-			fail(fmt.Errorf("no encontré un puerto libre; indica uno con --port"))
+			fail(fmt.Errorf("could not find a free port; pick one with --port"))
 		}
 	} else if !portFree(p) {
-		fail(fmt.Errorf("el puerto %d ya está ocupado; elige otro con --port", p))
+		fail(fmt.Errorf("port %d is already in use; choose another with --port", p))
 	}
 	h := *host
 	if h == "" {
@@ -123,7 +137,7 @@ func cmdInit(args []string) {
 	}
 	fmt.Printf("\n  DevDoctor listo\n  ───────────────\n  URL:        https://%s:%d\n", h, p)
 	if cfg.SetupToken != "" {
-		fmt.Printf("  Código:     %s\n\n  Abre la URL, introduce el código y crea tu usuario y contraseña en la web.\n  (¿Perdiste el código? sudo devdoctor setup-code)\n", cfg.SetupToken)
+		fmt.Printf("  Code:       %s\n\n  Open the URL, enter the code and create your username and password in the web UI.\n  (Lost the code? sudo devdoctor setup-code)\n", cfg.SetupToken)
 	} else {
 		fmt.Printf("  Usuario:    %s\n", *user)
 	}
@@ -133,8 +147,8 @@ func cmdInit(args []string) {
 func cmdPasswd(args []string) {
 	fs := flag.NewFlagSet("passwd", flag.ExitOnError)
 	path := configFlag(fs)
-	user := fs.String("user", "", "nuevo usuario (opcional)")
-	pass := fs.String("password", "", "nueva contraseña (aleatoria si se omite)")
+	user := fs.String("user", "", "new username (optional)")
+	pass := fs.String("password", "", "new password (random if omitted)")
 	fs.Parse(args)
 	cs, err := config.Load(*path)
 	if err != nil {
@@ -157,9 +171,9 @@ func cmdPasswd(args []string) {
 	if err != nil {
 		fail(err)
 	}
-	fmt.Println("Credenciales actualizadas. Reinicia el servicio para cerrar sesiones activas: systemctl restart devdoctor")
+	fmt.Println("Credentials updated. Restart the service to end active sessions: systemctl restart devdoctor")
 	if generated {
-		fmt.Println("Nueva contraseña:", *pass)
+		fmt.Println("New password:", *pass)
 	}
 }
 
@@ -181,7 +195,7 @@ func cmdRun(args []string) {
 	fs.Parse(args)
 	cs, err := config.Load(*path)
 	if err != nil {
-		fail(fmt.Errorf("no se pudo leer %s (%v). Ejecuta primero: devdoctor init", *path, err))
+		fail(fmt.Errorf("could not read %s (%v). Run first: devdoctor init", *path, err))
 	}
 	fail(server.Serve(cs, filepath.Dir(*path)))
 }
@@ -189,7 +203,7 @@ func cmdRun(args []string) {
 func cmdScan(args []string) {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
 	path := configFlag(fs)
-	asJSON := fs.Bool("json", false, "salida JSON")
+	asJSON := fs.Bool("json", false, "JSON output")
 	fs.Parse(args)
 	cs, err := config.Load(*path)
 	if err != nil {
@@ -203,8 +217,8 @@ func cmdScan(args []string) {
 		fmt.Println(string(b))
 		return
 	}
-	icons := map[string]string{"crit": "✖ CRÍTICO", "warn": "▲ AVISO  ", "info": "● INFO   ", "ok": "✔ OK     "}
-	fmt.Printf("Puntuación de salud: %d/100  (%d críticos, %d avisos)  — %dms\n\n", r.Score, r.Counts["crit"], r.Counts["warn"], r.DurationMs)
+	icons := map[string]string{"crit": "✖ CRITICAL", "warn": "▲ WARNING ", "info": "● INFO    ", "ok": "✔ OK      "}
+	fmt.Printf("Health score: %d/100  (%d critical, %d warnings)  — %dms\n\n", r.Score, r.Counts["crit"], r.Counts["warn"], r.DurationMs)
 	for _, f := range r.Findings {
 		fmt.Printf("%s [%s] %s\n", icons[f.Severity], f.Category, f.Title)
 		if f.Detail != "" {
@@ -226,19 +240,19 @@ func cmdSetupCode(args []string) {
 	}
 	c := cs.Get()
 	if c.Configured() || c.SetupToken == "" {
-		fmt.Println("La cuenta ya está configurada. Para restablecerla usa: devdoctor passwd")
+		fmt.Println("The account is already set up. To reset it use: devdoctor passwd")
 		return
 	}
 	fmt.Printf("URL:    https://%s:%d\nCódigo: %s\n", c.Host, c.Port, c.SetupToken)
 }
 
-// pickPort elige un puerto alto y poco habitual: aleatorio en 61000–64999, por encima del rango
-// efímero de Linux (32768–60999, usado por conexiones salientes) y que esté realmente libre.
+// pickPort picks an unusual high port: random in 61000-64999, above the Linux ephemeral
+// range (32768-60999, used for outgoing connections), and verified to be free.
 func pickPort() int {
 	lo, hi := 61000, 64999
 	if f := strings.Fields(sysReadFile("/proc/sys/net/ipv4/ip_local_port_range")); len(f) == 2 {
 		if top, err := strconv.Atoi(f[1]); err == nil && top >= lo && top < hi-1000 {
-			lo = top + 1 // el sistema tiene el rango efímero ampliado: empezar por encima
+			lo = top + 1 // the system widened the ephemeral range: start above it
 		}
 	}
 	for i := 0; i < 200; i++ {
@@ -259,4 +273,106 @@ func randBytes(n int) []byte {
 func sysReadFile(p string) string {
 	b, _ := os.ReadFile(p)
 	return string(b)
+}
+
+const repoRaw = "https://raw.githubusercontent.com/rasoftdev/DevDoctor"
+
+func needRoot() {
+	if os.Geteuid() != 0 {
+		fail(errors.New("this command must be run as root (use sudo)"))
+	}
+}
+
+// remoteVersion reads the published version number from the repository (a public file; nothing is sent).
+func remoteVersion(ref string) (string, error) {
+	cl := &http.Client{Timeout: 10 * time.Second}
+	resp, err := cl.Get(repoRaw + "/" + ref + "/internal/version/version.go")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	m := regexp.MustCompile(`Version\s*=\s*"([^"]+)"`).FindStringSubmatch(string(b))
+	if m == nil {
+		return "", errors.New("version not found")
+	}
+	return m[1], nil
+}
+
+func cmdUpdate(args []string) {
+	fs := flag.NewFlagSet("update", flag.ExitOnError)
+	ref := fs.String("ref", "main", "branch or tag to install")
+	check := fs.Bool("check", false, "only check whether a newer version exists")
+	force := fs.Bool("force", false, "reinstall even if the version number is the same")
+	fs.Parse(args)
+
+	latest, err := remoteVersion(*ref)
+	if err != nil {
+		fail(fmt.Errorf("could not check the latest version: %w", err))
+	}
+	fmt.Printf("Installed: %s\nLatest:    %s (%s)\n", version.Version, latest, *ref)
+	same := latest == version.Version
+	if same && !*force {
+		fmt.Println("DevDoctor is up to date. (Use --force to reinstall anyway.)")
+		return
+	}
+	if *check {
+		fmt.Println("An update is available. Run: sudo devdoctor update")
+		return
+	}
+	needRoot()
+	fmt.Println("Updating (your account, port and configuration are kept)...")
+	cmd := exec.Command("bash", "-c", "curl -fsSL "+repoRaw+"/"+*ref+"/get.sh | bash")
+	cmd.Env = append(os.Environ(), "DEVDOCTOR_REF="+*ref)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		fail(fmt.Errorf("update failed: %w", err))
+	}
+}
+
+func cmdUninstall(args []string) {
+	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
+	path := configFlag(fs)
+	yes := fs.Bool("yes", false, "do not ask for confirmation")
+	keep := fs.Bool("keep-config", false, "keep the configuration directory (account, port, certificate)")
+	fs.Parse(args)
+	needRoot()
+
+	if !*yes {
+		fmt.Print("This will remove DevDoctor from this server. Continue? [y/N] ")
+		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
+			fmt.Println("Cancelled.")
+			return
+		}
+	}
+	step := func(msg string, err error) {
+		if err != nil && !os.IsNotExist(err) {
+			fmt.Printf("  [WARN] %s: %v\n", msg, err)
+			return
+		}
+		fmt.Printf("  [OK]   %s\n", msg)
+	}
+	exec.Command("systemctl", "disable", "--now", "devdoctor").Run()
+	step("service stopped and disabled", nil)
+	step("removed /etc/systemd/system/devdoctor.service", os.Remove("/etc/systemd/system/devdoctor.service"))
+	exec.Command("systemctl", "daemon-reload").Run()
+	if _, err := os.Stat("/etc/fail2ban/filter.d/devdoctor.conf"); err == nil {
+		os.Remove("/etc/fail2ban/filter.d/devdoctor.conf")
+		os.Remove("/etc/fail2ban/jail.d/devdoctor.local")
+		exec.Command("systemctl", "reload", "fail2ban").Run()
+		step("removed the fail2ban jail", nil)
+	}
+	if *keep {
+		fmt.Printf("  [OK]   configuration kept in %s\n", filepath.Dir(*path))
+	} else if dir := filepath.Dir(*path); filepath.Base(dir) == "devdoctor" {
+		step("removed "+dir, os.RemoveAll(dir))
+	}
+	if exe, err := os.Executable(); err == nil {
+		step("removed "+exe, os.Remove(exe))
+	}
+	fmt.Println("DevDoctor has been uninstalled.")
 }

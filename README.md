@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="DevDoctor" width="300">
+</p>
+
 # DevDoctor
 
 **Diagnóstico y dashboard web para servidores Linux, en un único binario.**
@@ -42,9 +46,13 @@ y muestra los recursos del servidor en vivo.
   con un certificado autofirmado que se genera solo.
 - **Login configurable:** usuario y contraseña definidos al instalar y editables desde el dashboard
   (botón **Cuenta**) o con `devdoctor passwd`.
-- **Recursos en vivo** (refresco cada 2 s): CPU, RAM, swap, red, carga, discos e inodos, procesos
-  con más consumo, uptime e IPs.
-- **Diagnóstico completo** programado cada 15 minutos o bajo demanda, con puntuación de salud de 0 a 100.
+- **Recursos en vivo** (refresco cada 2 s): CPU con desglose (usuario, sistema, espera de E/S, steal), RAM
+  (caché y disponible) y swap, red (bytes, paquetes y errores), **E/S de disco** (MB/s e IOPS), carga,
+  **conexiones TCP**, procesos e hilos, **descriptores de archivo**, temperatura (si el hardware la
+  expone), **presión del sistema (PSI)**, discos con inodos, procesos con más consumo, uptime e IPs.
+- **Diagnóstico completo** programado cada 15 minutos o bajo demanda, con puntuación de salud de 0 a 100. Al pulsar **Escanear ahora**
+  el dashboard muestra una capa desenfocada con el logo y el tiempo transcurrido hasta que termina
+  (los escaneos automáticos no interrumpen la pantalla).
 - **Docker:** versiones dentro de los contenedores, estado, configuración peligrosa y CVEs de imágenes.
 - **Modo terminal:** `devdoctor scan` produce el mismo diagnóstico sin levantar el servidor.
 - **Servicio systemd endurecido** que se reinicia solo si falla.
@@ -207,8 +215,11 @@ y renovado automáticamente al reiniciar cuando le quedan menos de 30).
 ## Qué revisa DevDoctor
 
 ### Recursos (en vivo)
-CPU, memoria, swap, red (↓/↑), carga 1/5/15, discos con uso de inodos, procesos más pesados, procesos
-zombie y uptime.
+CPU (total y desglose usuario/sistema/iowait/steal), memoria (usada, caché, disponible), swap, red
+(↓/↑, paquetes/s y errores), E/S de disco (lectura, escritura e IOPS), carga 1/5/15 y por núcleo,
+conexiones TCP (establecidas, time-wait, en escucha), procesos e hilos, descriptores de archivo,
+temperatura, presión del kernel (PSI de CPU, memoria y E/S), discos con uso de inodos, procesos más
+pesados, procesos zombie y uptime. Los discos de `snap` y similares se ocultan para no meter ruido.
 
 ### Versiones
 PHP (incluidas versiones múltiples como `php8.1` y `php8.3`), Node.js, npm, Composer, Python, Nginx,
@@ -266,9 +277,10 @@ en las últimas 24 horas.
 
 ## Puntuación de salud
 
-Empieza en 100. Cada hallazgo **crítico** resta 12 puntos y cada **aviso** 4, con un máximo de 35 puntos
-de descuento por categoría para que un solo área (por ejemplo, muchas dependencias vulnerables) no
-hunda la nota por completo. Los hallazgos informativos no restan.
+Cada hallazgo **crítico** suma 12 puntos de penalización y cada **aviso** 4, con un máximo de 35 por
+categoría para que un solo área (por ejemplo, muchas dependencias vulnerables) no hunda la nota. La
+nota es `100 / (1 + penalización/60)`: sin hallazgos es 100, con 60 de penalización es 50, y baja de
+forma suave sin llegar de golpe a 0. Los hallazgos informativos no restan.
 
 | Puntuación | Color |
 |---|---|

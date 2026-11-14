@@ -54,6 +54,9 @@ func (s *Server) routes() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(web.Index)
 	})
+	for _, name := range []string{"logo.png", "favicon.png", "favicon-32.png", "apple-touch-icon.png"} {
+		mux.HandleFunc("GET /"+name, assetHandler(name))
+	}
 	mux.HandleFunc("GET /api/status", s.status)
 	mux.HandleFunc("POST /api/setup", s.setup)
 	mux.HandleFunc("POST /api/login", s.login)
@@ -66,7 +69,17 @@ func (s *Server) routes() http.Handler {
 	return s.secure(mux)
 }
 
-// originOK rechaza peticiones que no vengan de la propia página (defensa CSRF adicional a SameSite).
+// originOK rejects requests that do not come from the page itself (extra CSRF defence on top of SameSite).
+// assetHandler sirve un archivo embebido (logo/iconos) con caché pública.
+func assetHandler(name string) http.HandlerFunc {
+	data, _ := web.Assets.ReadFile(name)
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(data)
+	}
+}
+
 func originOK(r *http.Request) bool {
 	if sf := r.Header.Get("Sec-Fetch-Site"); sf != "" && sf != "same-origin" && sf != "none" {
 		return false
@@ -95,11 +108,11 @@ func (s *Server) secure(next http.Handler) http.Handler {
 		if r.Method == http.MethodPost {
 			// Los POST deben ser JSON y del mismo origen (impide formularios cross-site).
 			if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
-				http.Error(w, "content-type inválido", http.StatusUnsupportedMediaType)
+				http.Error(w, "invalid content type", http.StatusUnsupportedMediaType)
 				return
 			}
 			if !originOK(r) {
-				http.Error(w, "origen no permitido", http.StatusForbidden)
+				http.Error(w, "origin not allowed", http.StatusForbidden)
 				return
 			}
 		}
@@ -115,7 +128,7 @@ func (s *Server) sessionOK(r *http.Request) bool {
 func (s *Server) guard(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.sessionOK(r) {
-			writeJSON(w, 401, map[string]string{"error": "no autenticado"})
+			writeJSON(w, 401, map[string]string{"error": "not authenticated"})
 			return
 		}
 		h(w, r)
@@ -152,12 +165,12 @@ func setSession(w http.ResponseWriter, token string) {
 }
 
 func tooMany(w http.ResponseWriter) {
-	writeJSON(w, 429, map[string]string{"error": "demasiados intentos; espera 15 minutos"})
+	writeJSON(w, 429, map[string]string{"error": "too many attempts; wait 15 minutes"})
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(v) != nil {
-		writeJSON(w, 400, map[string]string{"error": "solicitud inválida"})
+		writeJSON(w, 400, map[string]string{"error": "invalid request"})
 		return false
 	}
 	return true
@@ -179,15 +192,15 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		var err error
 		ok, err = s.auth.WithHash(func() bool { return cfg.CheckLogin(in.Username, in.Password) })
 		if err != nil {
-			writeJSON(w, 503, map[string]string{"error": "servidor ocupado, inténtalo de nuevo"})
+			writeJSON(w, 503, map[string]string{"error": "server busy, try again"})
 			return
 		}
 	}
 	if !ok {
 		s.auth.Fail(ip)
-		log.Printf("login fallido desde %s", ip)
+		log.Printf("failed login from %s", ip)
 		time.Sleep(s.auth.Delay())
-		writeJSON(w, 401, map[string]string{"error": "usuario o contraseña incorrectos"})
+		writeJSON(w, 401, map[string]string{"error": "incorrect username or password"})
 		return
 	}
 	s.auth.Reset(ip)
@@ -205,7 +218,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	if !s.sessionOK(r) {
-		writeJSON(w, 401, map[string]string{"error": "no autenticado"})
+		writeJSON(w, 401, map[string]string{"error": "not authenticated"})
 		return
 	}
 	cfg := s.cs.Get()
@@ -215,7 +228,14 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 func (s *Server) metrics(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, s.sam.Get()) }
 
 func (s *Server) report(w http.ResponseWriter, r *http.Request) {
+	lang := "en"
+	if r.URL.Query().Get("lang") == "es" {
+		lang = "es"
+	}
 	rep, running := s.scan.Last()
+	if rep != nil {
+		rep = rep.Localize(lang)
+	}
 	writeJSON(w, 200, map[string]any{"running": running, "report": rep})
 }
 
@@ -244,15 +264,15 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 		var err error
 		ok, err = s.auth.WithHash(func() bool { return cfg.CheckLogin(cfg.Username, in.Current) })
 		if err != nil {
-			writeJSON(w, 503, map[string]string{"error": "servidor ocupado, inténtalo de nuevo"})
+			writeJSON(w, 503, map[string]string{"error": "server busy, try again"})
 			return
 		}
 	}
 	if !ok { // un robo de sesión no debe permitir adivinar la contraseña actual sin límite
 		s.auth.Fail(ip)
-		log.Printf("login fallido desde %s (cambio de cuenta)", ip)
+		log.Printf("failed login from %s (account change)", ip)
 		time.Sleep(s.auth.Delay())
-		writeJSON(w, 403, map[string]string{"error": "la contraseña actual no es correcta"})
+		writeJSON(w, 403, map[string]string{"error": "current password is incorrect"})
 		return
 	}
 	s.auth.Reset(ip)
@@ -261,7 +281,7 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 		next := *c
 		if in.Username != "" {
 			if len(in.Username) < 3 || len(in.Username) > 64 {
-				perr = errors.New("el usuario debe tener entre 3 y 64 caracteres")
+				perr = errors.New("username must be 3 to 64 characters")
 				return
 			}
 			next.Username = in.Username
@@ -281,7 +301,7 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": err.Error()})
 		return
 	}
-	log.Printf("credenciales actualizadas desde %s", ip)
+	log.Printf("credentials updated from %s", ip)
 	s.auth.DropAll() // cierra todas las sesiones; hay que volver a entrar
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
@@ -313,7 +333,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(in.Username) < 3 || len(in.Username) > 64 {
-			perr = errors.New("el usuario debe tener entre 3 y 64 caracteres")
+			perr = errors.New("username must be 3 to 64 characters")
 			return
 		}
 		next := *c
@@ -327,9 +347,9 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case denied:
 		s.auth.Fail(ip)
-		log.Printf("intento de configuración inicial rechazado desde %s", ip)
+		log.Printf("rejected initial setup attempt from %s", ip)
 		time.Sleep(s.auth.Delay())
-		writeJSON(w, 403, map[string]string{"error": "código de configuración incorrecto o la cuenta ya existe"})
+		writeJSON(w, 403, map[string]string{"error": "wrong setup code or the account already exists"})
 		return
 	case perr != nil:
 		writeJSON(w, 400, map[string]string{"error": perr.Error()})
@@ -339,7 +359,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.auth.Reset(ip)
-	log.Printf("cuenta inicial creada: %s", in.Username)
+	log.Printf("initial account created: %s", in.Username)
 	setSession(w, s.auth.NewSession(r.UserAgent()))
 	writeJSON(w, 200, map[string]string{"user": in.Username})
 }
@@ -348,7 +368,7 @@ func Serve(cs *config.Store, dir string) error {
 	cfg := cs.Get()
 	cert, err := config.EnsureCert(dir, cfg.Host)
 	if err != nil {
-		return fmt.Errorf("certificado TLS: %w", err)
+		return fmt.Errorf("TLS certificate: %w", err)
 	}
 	sam := &sysinfo.Sampler{}
 	sam.Start()
@@ -379,8 +399,8 @@ func Serve(cs *config.Store, dir string) error {
 		MaxHeaderBytes:    16 << 10,
 	}
 	if !cfg.Configured() {
-		log.Printf("PENDIENTE: abre https://%s:%d y crea tu cuenta con el código de configuración (devdoctor setup-code)", cfg.Host, cfg.Port)
+		log.Printf("PENDING: open https://%s:%d and create your account with the setup code (run: devdoctor setup-code)", cfg.Host, cfg.Port)
 	}
-	log.Printf("DevDoctor %s escuchando en https://%s:%d", version.Version, cfg.Host, cfg.Port)
+	log.Printf("DevDoctor %s listening on https://%s:%d", version.Version, cfg.Host, cfg.Port)
 	return hs.ListenAndServeTLS("", "")
 }

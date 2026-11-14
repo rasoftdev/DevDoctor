@@ -79,11 +79,10 @@ func checkVersions(c *Collector) {
 			label = "PHP (" + filepath.Base(b) + ")"
 		}
 		st, note := phpStatus(v)
-		add(VersionInfo{label, v, st, note})
+		add(mkVer(label, v, st, note))
 		if st == "crit" || st == "warn" {
 			sev := st
-			c.add("Versiones", sev, fmt.Sprintf("%s %s: %s", label, v, note), "",
-				"Actualiza a una rama con soporte activo (p. ej. PHP 8.3/8.4) y prueba tus apps antes de cambiar.")
+			c.add("Versions", sev, M("%s %s: %s", label, v, note), "", "Upgrade to a supported branch (e.g. PHP 8.3/8.4) and test your apps before switching.")
 		}
 	}
 
@@ -92,59 +91,58 @@ func checkVersions(c *Collector) {
 		if v == "" {
 			continue
 		}
-		st, note := "ok", ""
+		st, note := "ok", Msg{}
 		if t.name == "Node.js" {
 			st, note = nodeStatus(v)
 			if st == "crit" || st == "warn" {
-				c.add("Versiones", st, fmt.Sprintf("Node.js %s: %s", v, note), "",
-					"Instala una versión LTS vigente (nvm install --lts o NodeSource).")
+				c.add("Versions", st, M("Node.js %s: %s", v, note), "", "Install a current LTS release (nvm install --lts or NodeSource).")
 			}
 		}
-		add(VersionInfo{t.name, v, st, note})
+		add(mkVer(t.name, v, st, note))
 	}
 }
 
-func phpStatus(v string) (string, string) {
+func phpStatus(v string) (string, Msg) {
 	pv, _ := parseVer(v)
 	key := fmt.Sprintf("%d.%d", pv[0], pv[1])
 	eol, ok := phpEOL[key]
 	if !ok {
 		if pv[0] < 8 || (pv[0] == 8 && pv[1] < 1) {
-			return "crit", "versión sin soporte (EOL)"
+			return "crit", M("unsupported version (EOL)")
 		}
-		return "ok", ""
+		return "ok", Msg{}
 	}
 	days := int(time.Until(eol).Hours() / 24)
 	switch {
 	case days < 0:
-		return "crit", "sin soporte desde " + eol.Format("2006-01-02")
+		return "crit", M("no support since %s", eol.Format("2006-01-02"))
 	case days < 180:
-		return "warn", fmt.Sprintf("fin de soporte en %d días (%s)", days, eol.Format("2006-01-02"))
+		return "warn", M("end of support in %d days (%s)", days, eol.Format("2006-01-02"))
 	}
-	return "ok", "soporte hasta " + eol.Format("2006-01-02")
+	return "ok", M("supported until %s", eol.Format("2006-01-02"))
 }
 
-func nodeStatus(v string) (string, string) {
+func nodeStatus(v string) (string, Msg) {
 	pv, _ := parseVer(v)
 	maj := pv[0]
 	if maj%2 == 1 {
-		return "warn", "versión impar (no LTS), no recomendada en producción"
+		return "warn", M("odd-numbered release (not LTS), not recommended in production")
 	}
 	eol, ok := nodeEOL[maj]
 	if !ok {
 		if maj < 16 {
-			return "crit", "versión sin soporte (EOL)"
+			return "crit", M("unsupported version (EOL)")
 		}
-		return "ok", ""
+		return "ok", Msg{}
 	}
 	days := int(time.Until(eol).Hours() / 24)
 	switch {
 	case days < 0:
-		return "crit", "sin soporte desde " + eol.Format("2006-01-02")
+		return "crit", M("no support since %s", eol.Format("2006-01-02"))
 	case days < 180:
-		return "warn", fmt.Sprintf("fin de soporte en %d días (%s)", days, eol.Format("2006-01-02"))
+		return "warn", M("end of support in %d days (%s)", days, eol.Format("2006-01-02"))
 	}
-	return "ok", "soporte hasta " + eol.Format("2006-01-02")
+	return "ok", M("supported until %s", eol.Format("2006-01-02"))
 }
 
 func atoi(s string) int { n, _ := strconv.Atoi(strings.TrimSpace(s)); return n }
