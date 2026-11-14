@@ -163,7 +163,7 @@ devdoctor init     Crea configuración, certificado TLS y usuario
 devdoctor run      Inicia el dashboard (lo que ejecuta systemd)
 devdoctor url      Muestra la URL de acceso
 devdoctor setup-code  Muestra el código para crear la cuenta en la web
-devdoctor passwd   Cambia usuario/contraseña desde la terminal
+devdoctor passwd   Restablece usuario/contraseña desde la terminal (olvido o bloqueo)
 devdoctor scan     Ejecuta un diagnóstico en la terminal (--json para salida JSON)
 devdoctor version  Muestra la versión
 ```
@@ -530,13 +530,28 @@ sudo systemctl daemon-reload
 
 ## Solución de problemas
 
+### Olvidé mi contraseña / me bloqueé
+
+En el servidor (por SSH):
+
+```bash
+sudo devdoctor passwd                                    # genera una contraseña aleatoria y la muestra
+sudo devdoctor passwd --password 'MiClaveNueva-2026!'      # o la que tú elijas
+sudo devdoctor passwd --user otro --password '…'          # también puedes cambiar el usuario
+```
+
+El comando guarda las credenciales nuevas y **reinicia el servicio**, lo que cierra todas las sesiones y
+elimina el bloqueo por intentos fallidos (que vive en memoria). Con `--no-restart` no lo reinicia. Sirve
+también si nunca creaste la cuenta desde la web. La pantalla de login muestra este comando como recordatorio.
+
+
 | Síntoma | Qué hacer |
 |---|---|
 | No abre la URL | `sudo systemctl status devdoctor`; revisa que el puerto esté abierto en el firewall (`ufw allow PUERTO/tcp`) y en el panel de tu proveedor cloud |
 | La URL muestra una IP privada | Reinstala con `--host IP_PUBLICA` o edita `host` en `config.json` y reinicia |
 | `El puerto N ya está ocupado` | Elige otro con `--port` |
-| Olvidé la contraseña | `sudo devdoctor passwd` genera una nueva |
-| «Demasiados intentos» | Espera 15 minutos o reinicia el servicio (`systemctl restart devdoctor`) |
+| Olvidé la contraseña o me bloqueé | `sudo devdoctor passwd` crea una contraseña nueva, reinicia el servicio y limpia el bloqueo (ver abajo) |
+| «Demasiados intentos» | Espera 15 minutos, o ejecuta `sudo devdoctor passwd` (reinicia el servicio y limpia el bloqueo) |
 | Proyectos como «no auditado» | El servidor no tiene salida a internet o falta `composer`/`npm` |
 | No aparece la pestaña Docker con datos | `docker` no está instalado o el servicio no tiene acceso a `/var/run/docker.sock` |
 | Faltan datos de SSH/seguridad | Ejecuta el servicio como root (es lo que hace la unidad por defecto) |

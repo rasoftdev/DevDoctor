@@ -63,7 +63,7 @@ Usage: devdoctor <command> [options]
   run         Start the web dashboard (what the systemd service runs)
   url         Print the access URL
   setup-code  Print the one-time code used to create the account in the web UI
-  passwd      Change username/password from the terminal (--user, --password)
+  passwd      Reset the username/password from the terminal (forgot it or locked out; --user, --password)
   scan        Run a diagnosis in the terminal (--json for JSON output)
   update      Update to the latest version (--check to only look, --ref, --force)
   uninstall   Remove DevDoctor from this server (--yes, --keep-config)
@@ -144,14 +144,19 @@ func cmdInit(args []string) {
 	fmt.Println("\n  El navegador avisará de certificado autofirmado: es normal, acepta la excepción.")
 }
 
+// cmdPasswd resets the dashboard credentials from the terminal (forgotten password, locked out...).
 func cmdPasswd(args []string) {
 	fs := flag.NewFlagSet("passwd", flag.ExitOnError)
 	path := configFlag(fs)
-	user := fs.String("user", "", "new username (optional)")
-	pass := fs.String("password", "", "new password (random if omitted)")
+	user := fs.String("user", "", "username (keeps the current one if omitted)")
+	pass := fs.String("password", "", "new password (a random one is generated if omitted)")
+	noRestart := fs.Bool("no-restart", false, "do not restart the service afterwards")
 	fs.Parse(args)
 	cs, err := config.Load(*path)
 	if err != nil {
+		if os.IsPermission(err) {
+			fail(errors.New("permission denied reading " + *path + ": run with sudo"))
+		}
 		fail(err)
 	}
 	generated := false
@@ -159,11 +164,21 @@ func cmdPasswd(args []string) {
 		*pass, generated = config.RandomPassword(16), true
 	}
 	var perr error
+	var finalUser string
 	err = cs.Update(func(c *config.Config) {
+		next := *c
 		if *user != "" {
-			c.Username = *user
+			next.Username = strings.TrimSpace(*user)
 		}
-		perr = c.SetPassword(*pass)
+		if next.Username == "" {
+			next.Username = "admin" // account was never created in the web UI
+		}
+		if perr = next.SetPassword(*pass); perr != nil {
+			return
+		}
+		next.SetupToken = "" // the account now exists: the one-time setup code is no longer needed
+		*c = next
+		finalUser = next.Username
 	})
 	if perr != nil {
 		fail(perr)
@@ -171,9 +186,24 @@ func cmdPasswd(args []string) {
 	if err != nil {
 		fail(err)
 	}
-	fmt.Println("Credentials updated. Restart the service to end active sessions: systemctl restart devdoctor")
+	fmt.Println("Credentials updated.")
+	fmt.Println("  Username:", finalUser)
 	if generated {
-		fmt.Println("New password:", *pass)
+		fmt.Println("  Password:", *pass)
+		fmt.Println("  (You can change it later in the dashboard: Account)")
+	}
+
+	// A restart closes every active session and clears the in-memory login lockouts.
+	restarted := false
+	if !*noRestart && os.Geteuid() == 0 {
+		if out, _ := exec.Command("systemctl", "is-active", "devdoctor").Output(); strings.TrimSpace(string(out)) == "active" {
+			restarted = exec.Command("systemctl", "restart", "devdoctor").Run() == nil
+		}
+	}
+	if restarted {
+		fmt.Println("The service was restarted: sessions were closed and login lockouts were cleared.")
+	} else {
+		fmt.Println("Restart the service to close sessions and clear login lockouts: sudo systemctl restart devdoctor")
 	}
 }
 
