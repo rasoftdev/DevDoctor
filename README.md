@@ -35,6 +35,7 @@ y muestra los recursos del servidor en vivo.
 - [Solución de problemas](#solución-de-problemas)
 - [Limitaciones conocidas](#limitaciones-conocidas)
 - [Autor y contacto](#autor-y-contacto)
+- [Licencia](#licencia)
 
 ---
 
@@ -562,4 +563,6 @@ Creado por **Ricardo Alvarez**.
 
 ## Licencia
 
-Pendiente de definir por el autor. Hasta entonces, todos los derechos reservados.
+DevDoctor es software libre bajo la **licencia MIT**: cualquiera puede usarlo, copiarlo, modificarlo y
+distribuirlo, también con fines comerciales, conservando el aviso de copyright. Consulta el archivo
+[LICENSE](LICENSE). El software se ofrece «tal cual», sin garantía de ningún tipo.
