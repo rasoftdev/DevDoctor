@@ -1,0 +1,133 @@
+package main
+
+import (
+	"crypto/pbkdf2"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"math/big"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sync"
+)
+
+const pbkdf2Iter = 600000
+
+type Config struct {
+	Port            int      `json:"port"`
+	Host            string   `json:"host"`
+	Username        string   `json:"username"`
+	PassSalt        string   `json:"pass_salt"`
+	PassHash        string   `json:"pass_hash"`
+	Iter            int      `json:"iter"`
+	ScanRoots       []string `json:"scan_roots"`
+	ScanIntervalMin int      `json:"scan_interval_min"`
+}
+
+type ConfigStore struct {
+	mu   sync.RWMutex
+	path string
+	cfg  Config
+}
+
+func defaultConfigPath() string {
+	if p := os.Getenv("DEVDOCTOR_CONFIG"); p != "" {
+		return p
+	}
+	if runtime.GOOS == "linux" {
+		return "/etc/devdoctor/config.json"
+	}
+	return "devdoctor.json"
+}
+
+func loadConfig(path string) (*ConfigStore, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	s := &ConfigStore{path: path}
+	if err := json.Unmarshal(b, &s.cfg); err != nil {
+		return nil, err
+	}
+	if s.cfg.ScanIntervalMin <= 0 {
+		s.cfg.ScanIntervalMin = 15
+	}
+	return s, nil
+}
+
+func (s *ConfigStore) Get() Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg
+}
+
+func (s *ConfigStore) Update(fn func(c *Config)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn(&s.cfg)
+	return s.saveLocked()
+}
+
+func (s *ConfigStore) saveLocked() error {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(s.cfg, "", "  ")
+	tmp := s.path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, s.path)
+}
+
+func (c *Config) SetPassword(pw string) error {
+	if len(pw) < 10 {
+		return errors.New("la contraseña debe tener al menos 10 caracteres")
+	}
+	salt := make([]byte, 16)
+	rand.Read(salt)
+	h, err := pbkdf2.Key(sha256.New, pw, salt, pbkdf2Iter, 32)
+	if err != nil {
+		return err
+	}
+	c.Iter = pbkdf2Iter
+	c.PassSalt = base64.StdEncoding.EncodeToString(salt)
+	c.PassHash = base64.StdEncoding.EncodeToString(h)
+	return nil
+}
+
+func (c *Config) CheckLogin(user, pw string) bool {
+	salt, _ := base64.StdEncoding.DecodeString(c.PassSalt)
+	want, _ := base64.StdEncoding.DecodeString(c.PassHash)
+	iter := c.Iter
+	if iter == 0 {
+		iter = pbkdf2Iter
+	}
+	got, err := pbkdf2.Key(sha256.New, pw, salt, iter, 32)
+	if err != nil || len(want) == 0 {
+		return false
+	}
+	okPass := subtle.ConstantTimeCompare(got, want) == 1
+	okUser := subtle.ConstantTimeCompare([]byte(user), []byte(c.Username)) == 1
+	return okPass && okUser
+}
+
+func randomPassword(n int) string {
+	const alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	out := make([]byte, n)
+	for i := range out {
+		v, _ := rand.Int(rand.Reader, big.NewInt(int64(len(alphabet))))
+		out[i] = alphabet[v.Int64()]
+	}
+	return string(out)
+}
+
+func randomToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
