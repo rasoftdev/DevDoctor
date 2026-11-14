@@ -542,7 +542,7 @@ sudo devdoctor passwd --user otro --password '…'          # también puedes ca
 
 El comando guarda las credenciales nuevas y **reinicia el servicio**, lo que cierra todas las sesiones y
 elimina el bloqueo por intentos fallidos (que vive en memoria). Con `--no-restart` no lo reinicia. Sirve
-también si nunca creaste la cuenta desde la web. La pantalla de login muestra este comando como recordatorio.
+también si nunca creaste la cuenta desde la web.
 
 
 | Síntoma | Qué hacer |

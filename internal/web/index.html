@@ -31,8 +31,6 @@ input:focus{outline:2px solid var(--acc);outline-offset:-1px}
 .pw{position:relative}.pw input{padding-right:44px}
 .pw .eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);padding:7px;border:0;background:transparent;color:var(--mut);border-radius:8px}
 .pw .eye:hover{color:var(--text)}
-.forgot{font-size:12.5px;text-align:center;line-height:1.7}
-.auth code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
 .err{color:var(--crit);min-height:1.3em;font-size:13px}
 .lang{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .lang button{border:0;border-radius:0;background:transparent;padding:7px 11px;font-size:12px;font-weight:700;color:var(--mut)}
@@ -225,7 +223,6 @@ dialog form{display:grid;gap:18px}
     <label><span data-i18n="password"></span><input id="lp" type="password" autocomplete="current-password" required></label>
     <div class="err" id="le"></div>
     <button class="pri" style="justify-content:center" data-i18n="signIn"></button>
-    <div class="muted forgot" data-i18n-html="forgotHtml"></div>
   </form>
 </div>
 
@@ -296,7 +293,7 @@ const ic=(n,c='')=>`<svg class="i ${c}"><use href="#i-${n}"/></svg>`;
 const T={
 en:{setupTitle:'Initial setup',setupHelp:'Create your username and password. The setup code was printed in the terminal during installation (or run <code>sudo devdoctor setup-code</code>).',
  setupCode:'Setup code',username:'Username',password:'Password',newPassMin:'Password (min. 10 characters)',repeatPass:'Repeat the password',createAccount:'Create account and sign in',
- loginHelp:'Sign in to see your server status.',signIn:'Sign in',forgotHtml:'Forgot your password or locked out? On the server run<br><code>sudo devdoctor passwd</code><br>to create a new one.',account:'Account',signOut:'Sign out',scanNow:'Scan now',scanning:'Scanning...',scanHint:'Checking ports, services, SSL, permissions, dependencies and containers',
+ loginHelp:'Sign in to see your server status.',signIn:'Sign in',account:'Account',signOut:'Sign out',scanNow:'Scan now',scanning:'Scanning...',scanHint:'Checking ports, services, SSL, permissions, dependencies and containers',
  healthTitle:'Server health',noScanYet:'Running the first diagnosis...',lastScan:'Last diagnosis',critical:'critical',warning:'warnings',infoN:'info',
  disks:'Disks',topProcs:'Top processes by CPU',newUser:'New username (optional)',newPassOpt:'New password (optional, min. 10)',currentPass:'Current password',cancel:'Cancel',save:'Save',
  passMismatch:'The passwords do not match',acctUpdated:'Account updated. Please sign in again.',showPass:'Show password',hidePass:'Hide password',copy:'Copy',copied:'Copied',
@@ -312,7 +309,7 @@ en:{setupTitle:'Initial setup',setupHelp:'Create your username and password. The
  c_Versions:'Versions',c_Ports:'Ports',c_Services:'Services',c_SSL:'SSL',c_Permissions:'Permissions',c_Dependencies:'Dependencies',c_Docker:'Docker',c_Security:'Security',c_Resources:'Resources'},
 es:{setupTitle:'Configuración inicial',setupHelp:'Crea tu usuario y contraseña. El código de configuración se mostró en la terminal al instalar (o ejecuta <code>sudo devdoctor setup-code</code>).',
  setupCode:'Código de configuración',username:'Usuario',password:'Contraseña',newPassMin:'Contraseña (mín. 10 caracteres)',repeatPass:'Repite la contraseña',createAccount:'Crear cuenta y entrar',
- loginHelp:'Inicia sesión para ver el estado del servidor.',signIn:'Entrar',forgotHtml:'¿Olvidaste la contraseña o te bloqueaste? En el servidor ejecuta<br><code>sudo devdoctor passwd</code><br>para crear una nueva.',account:'Cuenta',signOut:'Salir',scanNow:'Escanear ahora',scanning:'Escaneando...',scanHint:'Revisando puertos, servicios, SSL, permisos, dependencias y contenedores',
+ loginHelp:'Inicia sesión para ver el estado del servidor.',signIn:'Entrar',account:'Cuenta',signOut:'Salir',scanNow:'Escanear ahora',scanning:'Escaneando...',scanHint:'Revisando puertos, servicios, SSL, permisos, dependencias y contenedores',
  healthTitle:'Salud del servidor',noScanYet:'Ejecutando el primer diagnóstico...',lastScan:'Último diagnóstico',critical:'críticos',warning:'avisos',infoN:'info',
  disks:'Discos',topProcs:'Procesos con más CPU',newUser:'Nuevo usuario (opcional)',newPassOpt:'Nueva contraseña (opcional, mín. 10)',currentPass:'Contraseña actual',cancel:'Cancelar',save:'Guardar',
  passMismatch:'Las contraseñas no coinciden',acctUpdated:'Cuenta actualizada. Inicia sesión de nuevo.',showPass:'Mostrar contraseña',hidePass:'Ocultar contraseña',copy:'Copiar',copied:'Copiado',
